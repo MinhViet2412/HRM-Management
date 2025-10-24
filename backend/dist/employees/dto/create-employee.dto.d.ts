@@ -1,0 +1,32 @@
+import { Gender, EmployeeStatus } from '../../database/entities/employee.entity';
+export declare class CreateEmployeeDto {
+    employeeCode?: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    password?: string;
+    phone?: string;
+    address?: string;
+    permanentAddress?: string;
+    currentAddress?: string;
+    dateOfBirth?: string;
+    gender?: Gender;
+    nationalId?: string;
+    citizenId?: string;
+    taxId?: string;
+    bankAccount?: string;
+    bankName?: string;
+    ethnicity?: string;
+    religion?: string;
+    basicSalary?: number;
+    allowance?: number;
+    avatar?: string;
+    hireDate?: string;
+    status?: EmployeeStatus;
+    emergencyContact?: string;
+    emergencyPhone?: string;
+    departmentId: string;
+    positionId: string;
+    workLocationId?: string;
+    shiftId?: string;
+}

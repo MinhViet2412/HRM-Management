@@ -1,0 +1,32 @@
+import { Repository } from 'typeorm';
+import { Attendance } from '../database/entities/attendance.entity';
+import { Employee } from '../database/entities/employee.entity';
+import { WorkLocation } from '../database/entities/work-location.entity';
+import { CheckInDto } from './dto/check-in.dto';
+import { CheckOutDto } from './dto/check-out.dto';
+import { AdjustAttendanceDto } from './dto/adjust-attendance.dto';
+import { WorkingHoursCalculator } from './working-hours-calculator.service';
+import { AttendanceRuleEngine } from './attendance-rule-engine.service';
+import { ManualAttendanceDto } from './dto/manual-attendance.dto';
+export declare class AttendanceService {
+    private attendanceRepository;
+    private employeeRepository;
+    private workLocationRepository;
+    private workingHoursCalculator;
+    private attendanceRuleEngine;
+    constructor(attendanceRepository: Repository<Attendance>, employeeRepository: Repository<Employee>, workLocationRepository: Repository<WorkLocation>, workingHoursCalculator: WorkingHoursCalculator, attendanceRuleEngine: AttendanceRuleEngine);
+    checkIn(employeeId: string, checkInDto: CheckInDto): Promise<Attendance>;
+    testAttendanceRules(checkIn: Date | null, checkOut: Date | null): Promise<any>;
+    getAllAttendanceRules(): Promise<any>;
+    reEvaluateAttendanceRecords(startDate?: Date, endDate?: Date, departmentId?: string): Promise<any>;
+    private calculateDistanceMeters;
+    checkOut(employeeId: string, checkOutDto: CheckOutDto): Promise<Attendance>;
+    getAttendanceByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<Attendance[]>;
+    getAttendanceByDate(date: Date): Promise<Attendance[]>;
+    getAttendanceWithFilters(startDate: Date, endDate: Date, departmentId?: string): Promise<Attendance[]>;
+    closeMissingCheckout(employeeId: string, date: Date, approvedBy: string): Promise<Attendance>;
+    getAttendanceSummary(employeeId: string, startDate: Date, endDate: Date): Promise<any>;
+    manualUpsert(dto: ManualAttendanceDto, userId: string): Promise<Attendance>;
+    adjustAttendance(attendanceId: string, adjustDto: AdjustAttendanceDto, adjustedBy: string): Promise<Attendance>;
+    testWorkingHoursCalculation(checkInTime: string, checkOutTime: string, shiftId: string): Promise<any>;
+}
