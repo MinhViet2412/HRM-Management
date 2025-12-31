@@ -22,7 +22,14 @@
     "migration:generate": "npm run typeorm -- migration:generate -d src/database/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts",
-    "seed": "ts-node src/database/seeds/index.ts"
+    "seed": "ts-node src/database/seeds/index.ts",
+    "migrate:emp002": "ts-node src/database/scripts/migrate-emp002-december-2025.ts",
+    "migrate:emp002-dec1": "ts-node src/database/scripts/add-emp002-dec-1-2025.ts",
+    "check:pm0002": "ts-node src/database/scripts/check-pm0002-dependents.ts",
+    "regenerate:payroll-emp002": "ts-node src/database/scripts/regenerate-payroll-emp002-dec2025.ts",
+    "add:missing-day-emp002": "ts-node src/database/scripts/add-missing-day-emp002-dec2025.ts",
+    "find:missing-day-emp002": "ts-node src/database/scripts/find-missing-day-emp002-dec2025.ts",
+    "check:attendance-emp002": "ts-node src/database/scripts/check-emp002-attendance-count.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

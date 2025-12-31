@@ -6,6 +6,11 @@ import { Employee, EmployeeStatus } from '../database/entities/employee.entity';
 import { Attendance } from '../database/entities/attendance.entity';
 import { Contract, ContractStatus } from '../database/entities/contract.entity';
 import { OvertimeRequest, OvertimeStatus } from '../database/entities/overtime-request.entity';
+import { InsuranceConfigService } from '../insurance-config/insurance-config.service';
+import { InsuranceType } from '../database/entities/insurance-config.entity';
+import { TaxConfigService } from '../tax-config/tax-config.service';
+import { DependentsService } from '../dependents/dependents.service';
+import { StandardWorkingHoursService } from '../standard-working-hours/standard-working-hours.service';
 
 @Injectable()
 export class PayrollService {
@@ -18,6 +23,10 @@ export class PayrollService {
     private attendanceRepository: Repository<Attendance>,
     @InjectRepository(OvertimeRequest)
     private overtimeRepository: Repository<OvertimeRequest>,
+    private insuranceConfigService: InsuranceConfigService,
+    private taxConfigService: TaxConfigService,
+    private dependentsService: DependentsService,
+    private standardWorkingHoursService: StandardWorkingHoursService,
   ) {}
 
   async generatePayroll(period: string, targetEmployeeId?: string): Promise<Payroll[]> {
@@ -75,8 +84,13 @@ export class PayrollService {
       });
 
       const workingDays = attendances.filter(a => (a.status as any) !== 'absent').length;
-      const totalWorkingDays = this.getWorkingDaysInMonth(startDate);
-      const standardWorkingHours = totalWorkingDays * 8; // 8 hours/day
+      
+      // Get standard working hours from config (or calculate if not configured)
+      const [year, month] = period.split('-').map(Number);
+      const standardConfig = await this.standardWorkingHoursService.getOrCalculate(year, month);
+      const totalWorkingDays = Number(standardConfig.days);
+      const standardWorkingHours = Number(standardConfig.hours);
+      
       const actualWorkingHours = attendances.reduce((sum, a) => sum + Number(a.workingHours || 0), 0);
 
       // Contractual figures
@@ -99,22 +113,91 @@ export class PayrollService {
       const overtimeHours = attendanceOvertimeHours + approvedOTHours;
       const overtimePay = hourlyRate * overtimeHours * 1.5;
 
-      // Pro-rated salary per formula
-      const actualSalary = hourlyRate * actualWorkingHours;
+      // Calculate actual salary:
+      // - If employee works full standard hours (>= standardWorkingHours), use full basicSalary
+      // - Otherwise, calculate pro-rated based on actual working hours
+      let actualSalary: number;
+      if (actualWorkingHours >= standardWorkingHours) {
+        // Employee worked full standard hours, use full contract salary
+        actualSalary = basicSalary;
+      } else {
+        // Employee worked less than standard hours, calculate pro-rated
+        actualSalary = hourlyRate * actualWorkingHours;
+      }
+      
       const bonus = 0;
       const grossSalary = actualSalary + allowance + overtimePay + bonus;
 
-      // Insurance based on contractual salary (default VN practice, employee share)
-      const insuranceBase = basicSalary;
-      const socialInsurance = insuranceBase * 0.08; // 8%
-      const healthInsurance = insuranceBase * 0.015; // 1.5%
-      const unemploymentInsurance = insuranceBase * 0.01; // 1%
+      // Calculate insurance based on configured insurance types
+      const insuranceConfigs = await this.insuranceConfigService.findActive();
+      
+      // Calculate insurance base based on salaryType
+      let socialInsurance = 0;
+      let healthInsurance = 0;
+      let unemploymentInsurance = 0;
+
+      for (const config of insuranceConfigs) {
+        // Determine insurance base based on salaryType
+        let insuranceBase: number;
+        if (config.salaryType === 'contract_total_income') {
+          // Tổng thu nhập trong hợp đồng: Lương cơ bản + Thưởng + Phụ cấp
+          insuranceBase = basicSalary + allowance + bonus;
+        } else {
+          // basic_salary: Chỉ tính trên lương cơ bản
+          insuranceBase = basicSalary;
+        }
+
+        // Calculate insurance amount using employee rate (if specified) or general insurance rate
+        const employeeRate = config.employeeRate ?? config.insuranceRate;
+        const insuranceAmount = (insuranceBase * employeeRate) / 100;
+
+        // Assign to appropriate insurance type
+        switch (config.type) {
+          case InsuranceType.SOCIAL:
+            socialInsurance = insuranceAmount;
+            break;
+          case InsuranceType.HEALTH:
+            healthInsurance = insuranceAmount;
+            break;
+          case InsuranceType.UNEMPLOYMENT:
+            unemploymentInsurance = insuranceAmount;
+            break;
+        }
+      }
+
       const totalInsurance = socialInsurance + healthInsurance + unemploymentInsurance;
 
       // PIT: progressive after insurance and personal deduction
-      const personalDeduction = 11000000; // default personal deduction (no dependents)
-      const taxableIncome = Math.max(0, grossSalary - totalInsurance - personalDeduction);
+      // Get personal deduction amount from config
+      const personalDeductionAmount = await this.taxConfigService.getDependentDeductionAmount();
+      
+      // Get active dependents count for this employee
+      const activeDependentsCount = await this.dependentsService.getActiveDependentsCount(employee.id);
+      
+      // Calculate total deduction: personal + dependents
+      const personalDeduction = 11000000; // Personal deduction (11 triệu)
+      const dependentsDeduction = activeDependentsCount * personalDeductionAmount;
+      const totalDeduction = personalDeduction + dependentsDeduction;
+      
+      const taxableIncome = Math.max(0, grossSalary - totalInsurance - totalDeduction);
       const tax = this.calculatePersonalIncomeTax(taxableIncome);
+      
+      // Debug log (can be removed in production)
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[Payroll Debug] Employee: ${employee.employeeCode}, Period: ${period}`);
+        console.log(`  Basic Salary: ${basicSalary.toLocaleString('vi-VN')} VND`);
+        console.log(`  Standard Working Hours: ${standardWorkingHours} hours`);
+        console.log(`  Actual Working Hours: ${actualWorkingHours} hours`);
+        console.log(`  Hourly Rate: ${hourlyRate.toLocaleString('vi-VN')} VND/hour`);
+        console.log(`  Actual Salary: ${actualSalary.toLocaleString('vi-VN')} VND`);
+        console.log(`  Gross Salary: ${grossSalary.toLocaleString('vi-VN')} VND`);
+        console.log(`  Total Insurance: ${totalInsurance.toLocaleString('vi-VN')} VND`);
+        console.log(`  Personal Deduction: ${personalDeduction.toLocaleString('vi-VN')} VND`);
+        console.log(`  Dependents Count: ${activeDependentsCount}, Deduction: ${dependentsDeduction.toLocaleString('vi-VN')} VND`);
+        console.log(`  Total Deduction: ${totalDeduction.toLocaleString('vi-VN')} VND`);
+        console.log(`  Taxable Income: ${taxableIncome.toLocaleString('vi-VN')} VND`);
+        console.log(`  Tax: ${tax.toLocaleString('vi-VN')} VND`);
+      }
 
       const totalDeductions = totalInsurance + tax;
       const netSalary = grossSalary - totalDeductions;
@@ -207,26 +290,67 @@ export class PayrollService {
 
   private calculatePersonalIncomeTax(taxableIncome: number): number {
     // Progressive tax brackets (VN monthly, in VND)
-    const brackets = [
-      { threshold: 5000000, rate: 0.05 },
-      { threshold: 10000000, rate: 0.10 },
-      { threshold: 18000000, rate: 0.15 },
-      { threshold: 32000000, rate: 0.20 },
-      { threshold: 52000000, rate: 0.25 },
-      { threshold: 80000000, rate: 0.30 },
-      { threshold: Infinity, rate: 0.35 },
-    ];
+    // Thuế lũy tiến từng phần theo quy định VN
+    // Bậc 1: Đến 5 triệu → 5%
+    // Bậc 2: Trên 5 đến 10 triệu → 10%
+    // Bậc 3: Trên 10 đến 18 triệu → 15%
+    // Bậc 4: Trên 18 đến 32 triệu → 20%
+    // Bậc 5: Trên 32 đến 52 triệu → 25%
+    // Bậc 6: Trên 52 đến 80 triệu → 30%
+    // Bậc 7: Trên 80 triệu → 35%
 
-    let remaining = taxableIncome;
-    let lastThreshold = 0;
+    if (taxableIncome <= 0) {
+      return 0;
+    }
+
     let tax = 0;
+    let remaining = taxableIncome;
 
-    for (const { threshold, rate } of brackets) {
-      if (remaining <= 0) break;
-      const band = Math.min(remaining, threshold - lastThreshold);
-      tax += band * rate;
-      remaining -= band;
-      lastThreshold = threshold;
+    // Bậc 1: 0 - 5 triệu (5%)
+    if (remaining > 0) {
+      const amount = Math.min(remaining, 5000000);
+      tax += amount * 0.05;
+      remaining -= amount;
+    }
+
+    // Bậc 2: 5 - 10 triệu (10%)
+    if (remaining > 0) {
+      const amount = Math.min(remaining, 5000000); // 10 triệu - 5 triệu = 5 triệu
+      tax += amount * 0.10;
+      remaining -= amount;
+    }
+
+    // Bậc 3: 10 - 18 triệu (15%)
+    if (remaining > 0) {
+      const amount = Math.min(remaining, 8000000); // 18 triệu - 10 triệu = 8 triệu
+      tax += amount * 0.15;
+      remaining -= amount;
+    }
+
+    // Bậc 4: 18 - 32 triệu (20%)
+    if (remaining > 0) {
+      const amount = Math.min(remaining, 14000000); // 32 triệu - 18 triệu = 14 triệu
+      tax += amount * 0.20;
+      remaining -= amount;
+    }
+
+    // Bậc 5: 32 - 52 triệu (25%)
+    if (remaining > 0) {
+      const amount = Math.min(remaining, 20000000); // 52 triệu - 32 triệu = 20 triệu
+      tax += amount * 0.25;
+      remaining -= amount;
+    }
+
+    // Bậc 6: 52 - 80 triệu (30%)
+    if (remaining > 0) {
+      const amount = Math.min(remaining, 28000000); // 80 triệu - 52 triệu = 28 triệu
+      tax += amount * 0.30;
+      remaining -= amount;
+    }
+
+    // Bậc 7: Trên 80 triệu (35%)
+    if (remaining > 0) {
+      tax += remaining * 0.35;
     }
 
     return Math.max(0, Math.floor(tax));

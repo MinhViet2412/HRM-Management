@@ -156,14 +156,14 @@ export class EmployeesService {
 
   async findAll(): Promise<Employee[]> {
     return this.employeeRepository.find({
-      relations: ['department', 'position', 'user', 'workLocation'],
+      relations: ['department', 'position', 'user', 'workLocation', 'shift', 'dependents'],
     });
   }
 
   async findOne(id: string): Promise<Employee> {
     const employee = await this.employeeRepository.findOne({
       where: { id },
-      relations: ['department', 'position', 'user', 'workLocation'],
+      relations: ['department', 'position', 'user', 'workLocation', 'shift', 'dependents'],
     });
 
     if (!employee) {
@@ -176,7 +176,7 @@ export class EmployeesService {
   async findByCode(employeeCode: string): Promise<Employee> {
     const employee = await this.employeeRepository.findOne({
       where: { employeeCode },
-      relations: ['department', 'position', 'user'],
+      relations: ['department', 'position', 'user', 'workLocation', 'shift'],
     });
 
     if (!employee) {
@@ -232,24 +232,28 @@ export class EmployeesService {
     }
 
     // Validate work location if updating
-    if (updateEmployeeDto.workLocationId) {
-      const workLocation = await this.workLocationRepository.findOne({
-        where: { id: updateEmployeeDto.workLocationId },
-      });
+    if (updateEmployeeDto.workLocationId !== undefined) {
+      if (updateEmployeeDto.workLocationId) {
+        const workLocation = await this.workLocationRepository.findOne({
+          where: { id: updateEmployeeDto.workLocationId },
+        });
 
-      if (!workLocation) {
-        throw new BadRequestException('Work location not found');
+        if (!workLocation) {
+          throw new BadRequestException('Work location not found');
+        }
       }
     }
 
     // Validate shift if updating
-    if (updateEmployeeDto.shiftId) {
-      const shift = await this.shiftRepository.findOne({
-        where: { id: updateEmployeeDto.shiftId },
-      });
+    if (updateEmployeeDto.shiftId !== undefined) {
+      if (updateEmployeeDto.shiftId) {
+        const shift = await this.shiftRepository.findOne({
+          where: { id: updateEmployeeDto.shiftId },
+        });
 
-      if (!shift) {
-        throw new BadRequestException('Shift not found');
+        if (!shift) {
+          throw new BadRequestException('Shift not found');
+        }
       }
     }
 
@@ -302,7 +306,57 @@ export class EmployeesService {
       employee.user = savedUser;
     }
 
-    Object.assign(employee, updateEmployeeDto);
+    // Update all fields including relations
+    // Only update fields that are actually provided in the DTO
+    const updateData: any = {};
+    
+    if (updateEmployeeDto.employeeCode) updateData.employeeCode = updateEmployeeDto.employeeCode;
+    if (updateEmployeeDto.firstName) updateData.firstName = updateEmployeeDto.firstName;
+    if (updateEmployeeDto.lastName) updateData.lastName = updateEmployeeDto.lastName;
+    if (updateEmployeeDto.email) updateData.email = updateEmployeeDto.email;
+    if (updateEmployeeDto.phone !== undefined) updateData.phone = updateEmployeeDto.phone;
+    if (updateEmployeeDto.address !== undefined) updateData.address = updateEmployeeDto.address;
+    if (updateEmployeeDto.permanentAddress !== undefined) updateData.permanentAddress = updateEmployeeDto.permanentAddress;
+    if (updateEmployeeDto.currentAddress !== undefined) updateData.currentAddress = updateEmployeeDto.currentAddress;
+    if (updateEmployeeDto.dateOfBirth) updateData.dateOfBirth = new Date(updateEmployeeDto.dateOfBirth);
+    if (updateEmployeeDto.gender) updateData.gender = updateEmployeeDto.gender;
+    if (updateEmployeeDto.nationalId !== undefined) updateData.nationalId = updateEmployeeDto.nationalId;
+    if (updateEmployeeDto.citizenId !== undefined) updateData.citizenId = updateEmployeeDto.citizenId;
+    if (updateEmployeeDto.taxId !== undefined) updateData.taxId = updateEmployeeDto.taxId;
+    if (updateEmployeeDto.bankAccount !== undefined) updateData.bankAccount = updateEmployeeDto.bankAccount;
+    if (updateEmployeeDto.bankName !== undefined) updateData.bankName = updateEmployeeDto.bankName;
+    if (updateEmployeeDto.ethnicity !== undefined) updateData.ethnicity = updateEmployeeDto.ethnicity;
+    if (updateEmployeeDto.religion !== undefined) updateData.religion = updateEmployeeDto.religion;
+    if (updateEmployeeDto.basicSalary !== undefined) updateData.basicSalary = updateEmployeeDto.basicSalary;
+    if (updateEmployeeDto.allowance !== undefined) updateData.allowance = updateEmployeeDto.allowance;
+    if (updateEmployeeDto.hireDate) updateData.hireDate = new Date(updateEmployeeDto.hireDate);
+    if (updateEmployeeDto.status) updateData.status = updateEmployeeDto.status;
+    if (updateEmployeeDto.avatar !== undefined) updateData.avatar = updateEmployeeDto.avatar;
+    if (updateEmployeeDto.emergencyContact !== undefined) updateData.emergencyContact = updateEmployeeDto.emergencyContact;
+    if (updateEmployeeDto.emergencyPhone !== undefined) updateData.emergencyPhone = updateEmployeeDto.emergencyPhone;
+    
+    // Handle departmentId - allow null to remove relationship
+    if (updateEmployeeDto.departmentId !== undefined) {
+      updateData.departmentId = updateEmployeeDto.departmentId || null;
+    }
+    
+    // Handle positionId - allow null to remove relationship
+    if (updateEmployeeDto.positionId !== undefined) {
+      updateData.positionId = updateEmployeeDto.positionId || null;
+    }
+    
+    // Handle nullable foreign keys - allow setting to null to remove relationship
+    if (updateEmployeeDto.workLocationId !== undefined) {
+      updateData.workLocationId = updateEmployeeDto.workLocationId || null;
+    }
+    
+    if (updateEmployeeDto.shiftId !== undefined) {
+      updateData.shiftId = updateEmployeeDto.shiftId || null;
+    }
+    
+    // Apply updates
+    Object.assign(employee, updateData);
+    
     await this.employeeRepository.save(employee);
     return this.findOne(id);
   }
@@ -361,7 +415,7 @@ export class EmployeesService {
   async getActiveEmployees(): Promise<Employee[]> {
     return this.employeeRepository.find({
       where: { status: EmployeeStatus.ACTIVE },
-      relations: ['department', 'position'],
+      relations: ['department', 'position', 'workLocation', 'shift'],
     });
   }
 }

@@ -1,10 +1,789 @@
-import { useState } from 'react'
-import { User, Bell, Shield, Database } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, Bell, Shield, Database, Receipt, ShieldCheck, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import api, { API_BASE_URL } from '../services/api'
 import toast from 'react-hot-toast'
+
+// Tax Config Tab Component
+const TaxConfigTab = () => {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [deductionAmount, setDeductionAmount] = useState<number>(4400000)
+
+  const { data: currentAmount, isLoading } = useQuery(
+    'taxConfig.dependentDeduction',
+    async () => {
+      const res = await api.get('/tax-config/dependent-deduction')
+      return res.data
+    }
+  )
+
+  useEffect(() => {
+    if (currentAmount !== undefined) {
+      setDeductionAmount(currentAmount)
+    }
+  }, [currentAmount])
+
+  const updateMutation = useMutation(
+    async (amount: number) => {
+      return api.patch('/tax-config/dependent-deduction', { amount })
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('taxConfig.dependentDeduction')
+        toast.success(t('settings.taxConfigUpdateSuccess') || 'Đã cập nhật giá trị giảm trừ thành công')
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.taxConfigUpdateError') || 'Không thể cập nhật giá trị giảm trừ')
+      }
+    }
+  )
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    updateMutation.mutate(deductionAmount)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium text-gray-900">
+          {t('settings.taxConfig') || 'Cấu hình thuế'}
+        </h3>
+        <p className="text-sm text-gray-600">
+          {t('settings.taxConfigSubtitle') || 'Cấu hình giá trị giảm trừ thuế cho người phụ thuộc'}
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="card p-6 bg-blue-50 border border-blue-200">
+          <h4 className="text-md font-medium text-gray-900 mb-2">
+            {t('settings.dependentDeductionAmount') || 'Giá trị giảm trừ người phụ thuộc'}
+          </h4>
+          <p className="text-sm text-gray-600 mb-4">
+            {t('settings.dependentDeductionDescription') || 
+              'Giá trị này sẽ được sử dụng làm mặc định khi thêm người phụ thuộc mới. Bạn có thể thay đổi giá trị cho từng người phụ thuộc cụ thể.'}
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {t('settings.deductionAmount') || 'Giá trị giảm trừ (VNĐ)'} <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                className="input w-full"
+                value={deductionAmount}
+                onChange={(e) => setDeductionAmount(parseFloat(e.target.value) || 0)}
+                min="0"
+                step="1000"
+                required
+              />
+              <p className="text-sm text-gray-500 mt-2">
+                {new Intl.NumberFormat('vi-VN', {
+                  style: 'currency',
+                  currency: 'VND',
+                }).format(deductionAmount)}
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h5 className="text-sm font-medium text-gray-900 mb-2">
+                {t('settings.currentValue') || 'Giá trị hiện tại'}
+              </h5>
+              <p className="text-2xl font-bold text-primary-600">
+                {new Intl.NumberFormat('vi-VN', {
+                  style: 'currency',
+                  currency: 'VND',
+                }).format(currentAmount || 4400000)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={updateMutation.isLoading}
+            >
+              {updateMutation.isLoading
+                ? t('common.saving') || 'Đang lưu...'
+                : t('common.saveChanges') || 'Lưu thay đổi'}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// Insurance Config Tab Component
+const InsuranceConfigTab = () => {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingConfig, setEditingConfig] = useState<any>(null)
+  const [form, setForm] = useState<any>({
+    type: 'social',
+    insuranceRate: '',
+    salaryType: 'contract_total_income',
+    isActive: true,
+  })
+
+  const { data: configs, isLoading } = useQuery(
+    'insuranceConfigs',
+    async () => {
+      const res = await api.get('/insurance-config')
+      return res.data
+    }
+  )
+
+  const createMutation = useMutation(
+    (payload: any) => api.post('/insurance-config', payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('insuranceConfigs')
+        toast.success(t('settings.insuranceCreateSuccess'))
+        setIsModalOpen(false)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.insuranceCreateError'))
+      }
+    }
+  )
+
+  const updateMutation = useMutation(
+    ({ id, payload }: { id: string; payload: any }) => api.patch(`/insurance-config/${id}`, payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('insuranceConfigs')
+        toast.success(t('settings.insuranceUpdateSuccess'))
+        setIsModalOpen(false)
+        setEditingConfig(null)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.insuranceUpdateError'))
+      }
+    }
+  )
+
+  const deleteMutation = useMutation(
+    (id: string) => api.delete(`/insurance-config/${id}`),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('insuranceConfigs')
+        toast.success(t('settings.insuranceDeleteSuccess'))
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.insuranceDeleteError'))
+      }
+    }
+  )
+
+  const resetForm = () => {
+    setForm({
+      type: 'social',
+      insuranceRate: '',
+      salaryType: 'contract_total_income',
+      isActive: true,
+    })
+  }
+
+  const handleOpenModal = (config?: any) => {
+    if (config) {
+      setEditingConfig(config)
+      setForm({
+        type: config.type,
+        insuranceRate: config.insuranceRate || config.employeeRate || '',
+        salaryType: config.salaryType || 'contract_total_income',
+        isActive: config.isActive,
+      })
+    } else {
+      setEditingConfig(null)
+      resetForm()
+    }
+    setIsModalOpen(true)
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const payload = {
+      ...form,
+      insuranceRate: parseFloat(form.insuranceRate) || 0,
+    }
+
+    if (editingConfig) {
+      updateMutation.mutate({ id: editingConfig.id, payload })
+    } else {
+      createMutation.mutate(payload)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    if (confirm(t('settings.insuranceConfirmDelete'))) {
+      deleteMutation.mutate(id)
+    }
+  }
+
+  const getTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      social: 'Bảo hiểm xã hội (BHXH)',
+      health: 'Bảo hiểm y tế (BHYT)',
+      unemployment: 'Bảo hiểm thất nghiệp (BHTN)',
+    }
+    return labels[type] || type
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">
+            {t('settings.insuranceConfig')}
+          </h3>
+          <p className="text-sm text-gray-600">
+            {t('settings.insuranceConfigSubtitle')}
+          </p>
+        </div>
+        <button
+          onClick={() => handleOpenModal()}
+          className="btn btn-primary"
+        >
+          {t('settings.addInsurance')}
+        </button>
+      </div>
+
+      {configs && configs.length > 0 ? (
+        <div className="space-y-4">
+          {configs.map((config: any) => (
+            <div
+              key={config.id}
+              className="card p-6 border-l-4 border-l-primary-500"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h4 className="text-lg font-medium text-gray-900">
+                      {getTypeLabel(config.type)}
+                    </h4>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      config.isActive
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {config.isActive ? 'Đang áp dụng' : 'Không áp dụng'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Giá trị đóng bảo hiểm</p>
+                      <p className="text-xl font-bold text-blue-600">
+                        {config.insuranceRate || config.employeeRate || 0}%
+                      </p>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Tính trên loại lương</p>
+                      <p className="text-lg font-semibold text-green-600">
+                        {config.salaryType === 'contract_total_income' 
+                          ? 'Tổng thu nhập trong hợp đồng'
+                          : config.salaryType === 'basic_salary'
+                          ? 'Lương cơ bản'
+                          : config.salaryType || 'Tổng thu nhập trong hợp đồng'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 ml-4">
+                  <button
+                    onClick={() => handleOpenModal(config)}
+                    className="btn btn-secondary text-sm"
+                  >
+                    {t('common.edit')}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(config.id)}
+                    className="btn btn-danger text-sm"
+                  >
+                    {t('common.delete')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 text-gray-500">
+          <ShieldCheck className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <p>{t('settings.noInsuranceConfigs')}</p>
+        </div>
+      )}
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium mb-4">
+              {editingConfig
+                ? t('settings.editInsurance')
+                : t('settings.addInsurance')}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.insuranceType')} <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className="input mt-1 w-full"
+                    value={form.type}
+                    onChange={(e) => setForm({ ...form, type: e.target.value })}
+                    required
+                    disabled={!!editingConfig}
+                  >
+                    <option value="social">Bảo hiểm xã hội (BHXH)</option>
+                    <option value="health">Bảo hiểm y tế (BHYT)</option>
+                    <option value="unemployment">Bảo hiểm thất nghiệp (BHTN)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.insuranceRate') || 'Giá trị đóng bảo hiểm (%)'} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="input mt-1 w-full"
+                    value={form.insuranceRate}
+                    onChange={(e) => setForm({ ...form, insuranceRate: e.target.value === '' ? '' : parseFloat(e.target.value) || '' })}
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.salaryType') || 'Tính trên'} <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className="input mt-1 w-full"
+                    value={form.salaryType}
+                    onChange={(e) => setForm({ ...form, salaryType: e.target.value })}
+                    required
+                  >
+                    <option value="contract_total_income">Tổng thu nhập trong hợp đồng</option>
+                    <option value="basic_salary">Lương cơ bản</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={form.isActive}
+                      onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      {t('settings.isActive')}
+                    </span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false)
+                    setEditingConfig(null)
+                    resetForm()
+                  }}
+                  className="btn btn-secondary"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={createMutation.isLoading || updateMutation.isLoading}
+                >
+                  {editingConfig ? t('common.saveChanges') : t('common.add')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Standard Working Hours Tab Component
+const StandardWorkingHoursTab = () => {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingConfig, setEditingConfig] = useState<any>(null)
+  const [form, setForm] = useState<any>({
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1,
+    standardHours: 0,
+    standardDays: 0,
+    description: '',
+  })
+
+  const { data: configs, isLoading } = useQuery(
+    'standardWorkingHours',
+    async () => {
+      const res = await api.get('/standard-working-hours')
+      return res.data
+    }
+  )
+
+  const createMutation = useMutation(
+    (payload: any) => api.post('/standard-working-hours', payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('standardWorkingHours')
+        toast.success(t('settings.workingHoursCreateSuccess') || 'Đã tạo cấu hình giờ công chuẩn thành công')
+        setIsModalOpen(false)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.workingHoursCreateError') || 'Không thể tạo cấu hình giờ công chuẩn')
+      }
+    }
+  )
+
+  const updateMutation = useMutation(
+    ({ id, payload }: { id: string; payload: any }) => api.patch(`/standard-working-hours/${id}`, payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('standardWorkingHours')
+        toast.success(t('settings.workingHoursUpdateSuccess') || 'Đã cập nhật cấu hình giờ công chuẩn thành công')
+        setIsModalOpen(false)
+        setEditingConfig(null)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.workingHoursUpdateError') || 'Không thể cập nhật cấu hình giờ công chuẩn')
+      }
+    }
+  )
+
+  const deleteMutation = useMutation(
+    (id: string) => api.delete(`/standard-working-hours/${id}`),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('standardWorkingHours')
+        toast.success(t('settings.workingHoursDeleteSuccess') || 'Đã xóa cấu hình giờ công chuẩn thành công')
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.workingHoursDeleteError') || 'Không thể xóa cấu hình giờ công chuẩn')
+      }
+    }
+  )
+
+  const calculateMutation = useMutation(
+    ({ year, month }: { year: number; month: number }) => api.get(`/standard-working-hours/calculate/${year}/${month}`),
+    {
+      onSuccess: (data) => {
+        setForm((prev: any) => ({
+          ...prev,
+          standardHours: data.data.hours,
+          standardDays: data.data.days,
+        }))
+        toast.success(t('settings.workingHoursCalculateSuccess') || 'Đã tính toán giờ công chuẩn tự động')
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.workingHoursCalculateError') || 'Không thể tính toán giờ công chuẩn')
+      }
+    }
+  )
+
+  const resetForm = () => {
+    setForm({
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      standardHours: 0,
+      standardDays: 0,
+      description: '',
+    })
+  }
+
+  const handleOpenModal = (config?: any) => {
+    if (config) {
+      setEditingConfig(config)
+      setForm({
+        year: config.year,
+        month: config.month,
+        standardHours: config.standardHours,
+        standardDays: config.standardDays,
+        description: config.description || '',
+      })
+    } else {
+      setEditingConfig(null)
+      resetForm()
+    }
+    setIsModalOpen(true)
+  }
+
+  const handleCalculate = () => {
+    calculateMutation.mutate({ year: form.year, month: form.month })
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const payload = {
+      ...form,
+    }
+
+    if (editingConfig) {
+      updateMutation.mutate({ id: editingConfig.id, payload })
+    } else {
+      createMutation.mutate(payload)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    if (confirm(t('settings.workingHoursConfirmDelete') || 'Bạn có chắc chắn muốn xóa cấu hình giờ công chuẩn này?')) {
+      deleteMutation.mutate(id)
+    }
+  }
+
+  const getMonthName = (month: number) => {
+    const months = [
+      'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+    ]
+    return months[month - 1] || `Tháng ${month}`
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">
+            {t('settings.standardWorkingHours') || 'Giờ công chuẩn trong tháng'}
+          </h3>
+          <p className="text-sm text-gray-600">
+            {t('settings.standardWorkingHoursDescription') || 'Quản lý số giờ công chuẩn cho từng tháng'}
+          </p>
+        </div>
+        <button
+          onClick={() => handleOpenModal()}
+          className="btn btn-primary"
+        >
+          {t('settings.addWorkingHours') || 'Thêm cấu hình'}
+        </button>
+      </div>
+
+      {configs && configs.length > 0 ? (
+        <div className="space-y-4">
+          {configs.map((config: any) => (
+            <div
+              key={config.id}
+              className="card p-6 border-l-4 border-l-blue-500"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h4 className="text-lg font-medium text-gray-900">
+                      {getMonthName(config.month)}/{config.year}
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Số giờ công chuẩn</p>
+                      <p className="text-xl font-bold text-blue-600">{config.standardHours} giờ</p>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Số ngày công chuẩn</p>
+                      <p className="text-xl font-bold text-green-600">{config.standardDays} ngày</p>
+                    </div>
+                  </div>
+
+                  {config.description && (
+                    <p className="text-sm text-gray-600 mb-3">{config.description}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 ml-4">
+                  <button
+                    onClick={() => handleOpenModal(config)}
+                    className="btn btn-secondary text-sm"
+                  >
+                    {t('common.edit')}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(config.id)}
+                    className="btn btn-danger text-sm"
+                  >
+                    {t('common.delete')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 text-gray-500">
+          <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <p>{t('settings.noWorkingHoursConfigs') || 'Chưa có cấu hình giờ công chuẩn nào'}</p>
+        </div>
+      )}
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium mb-4">
+              {editingConfig
+                ? t('settings.editWorkingHours') || 'Chỉnh sửa giờ công chuẩn'
+                : t('settings.addWorkingHours') || 'Thêm giờ công chuẩn'}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.year') || 'Năm'} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="input mt-1 w-full"
+                    value={form.year}
+                    onChange={(e) => setForm({ ...form, year: parseInt(e.target.value) || new Date().getFullYear() })}
+                    min="2000"
+                    max="2100"
+                    required
+                    disabled={!!editingConfig}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.month') || 'Tháng'} <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className="input mt-1 w-full"
+                    value={form.month}
+                    onChange={(e) => setForm({ ...form, month: parseInt(e.target.value) })}
+                    required
+                    disabled={!!editingConfig}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                      <option key={m} value={m}>
+                        {getMonthName(m)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.standardHours') || 'Số giờ công chuẩn'} <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      className="input mt-1 w-full"
+                      value={form.standardHours}
+                      onChange={(e) => setForm({ ...form, standardHours: parseFloat(e.target.value) || 0 })}
+                      min="0"
+                      step="0.01"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCalculate}
+                      className="btn btn-secondary mt-1"
+                      disabled={calculateMutation.isLoading}
+                    >
+                      {t('settings.calculate') || 'Tính tự động'}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.standardDays') || 'Số ngày công chuẩn'} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="input mt-1 w-full"
+                    value={form.standardDays}
+                    onChange={(e) => setForm({ ...form, standardDays: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('settings.description') || 'Mô tả'}
+                  </label>
+                  <textarea
+                    className="input mt-1 w-full"
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    placeholder={t('settings.workingHoursDescriptionPlaceholder') || 'Ví dụ: Tháng 12 có nhiều ngày nghỉ lễ'}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false)
+                    setEditingConfig(null)
+                    resetForm()
+                  }}
+                  className="btn btn-secondary"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={createMutation.isLoading || updateMutation.isLoading}
+                >
+                  {editingConfig ? t('common.saveChanges') : t('common.add')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('profile')
@@ -74,6 +853,9 @@ const Settings = () => {
     { id: 'profile', name: t('settings.profileInfo'), icon: User },
     { id: 'notifications', name: t('settings.notifications'), icon: Bell },
     { id: 'security', name: t('settings.security'), icon: Shield },
+    { id: 'tax', name: t('settings.taxConfig') || 'Cấu hình thuế', icon: Receipt },
+    { id: 'insurance', name: t('settings.insuranceConfig') || 'Cấu hình bảo hiểm', icon: ShieldCheck },
+    { id: 'working-hours', name: t('settings.standardWorkingHours') || 'Giờ công chuẩn', icon: Clock },
     { id: 'system', name: t('settings.system'), icon: Database },
   ]
 
@@ -296,6 +1078,12 @@ const Settings = () => {
           </div>
         )
 
+      case 'tax':
+        return <TaxConfigTab />
+      case 'insurance':
+        return <InsuranceConfigTab />
+      case 'working-hours':
+        return <StandardWorkingHoursTab />
       case 'system':
         return (
           <div className="space-y-6">

@@ -17,6 +17,7 @@ import { LeaveRequest } from './leave-request.entity';
 import { Payroll } from './payroll.entity';
 import { WorkLocation } from './work-location.entity';
 import { Shift } from './shift.entity';
+import { Dependent } from './dependent.entity';
 
 export enum EmployeeStatus {
   ACTIVE = 'active',
@@ -176,4 +177,7 @@ export class Employee {
 
   @OneToMany(() => Payroll, (payroll) => payroll.employee)
   payrolls: Payroll[];
+
+  @OneToMany(() => Dependent, (dependent) => dependent.employee)
+  dependents: Dependent[];
 }

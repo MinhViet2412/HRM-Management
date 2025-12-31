@@ -119,8 +119,9 @@ export class AttendanceController {
     @Query('endDate') endDate?: string,
     @Query('departmentId') departmentId?: string,
   ) {
-    const start = startDate ? new Date(startDate) : new Date();
-    const end = endDate ? new Date(endDate) : new Date();
+    // Parse dates properly to avoid timezone issues
+    const start = startDate ? new Date(startDate + 'T00:00:00') : new Date();
+    const end = endDate ? new Date(endDate + 'T23:59:59') : new Date();
     return this.attendanceService.getAttendanceWithFilters(start, end, departmentId);
   }
 

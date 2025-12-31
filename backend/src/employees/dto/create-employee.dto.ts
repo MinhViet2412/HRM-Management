@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, IsEnum, IsDateString, IsUUID, IsNumber, Min } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsEnum, IsDateString, IsUUID, IsNumber, Min, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Gender, EmployeeStatus } from '../../database/entities/employee.entity';
 
@@ -139,11 +139,13 @@ export class CreateEmployeeDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @ValidateIf((o) => o.workLocationId !== null && o.workLocationId !== undefined)
   @IsUUID()
-  workLocationId?: string;
+  workLocationId?: string | null;
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @ValidateIf((o) => o.shiftId !== null && o.shiftId !== undefined)
   @IsUUID()
-  shiftId?: string;
+  shiftId?: string | null;
 }

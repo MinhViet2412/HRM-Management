@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CheckOutDto {
@@ -10,4 +10,14 @@ export class CheckOutDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({ example: 10.762622, required: false })
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @ApiProperty({ example: 106.660172, required: false })
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
 }

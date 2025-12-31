@@ -28,6 +28,10 @@ import { ContractTypesModule } from './contract-types/contract-types.module';
 import { PayslipsModule } from './payslips/payslips.module';
 import { OvertimeModule } from './overtime/overtime.module';
 import { AttendanceSeeder } from './database/seeds/attendance.seeder';
+import { DependentsModule } from './dependents/dependents.module';
+import { TaxConfigModule } from './tax-config/tax-config.module';
+import { InsuranceConfigModule } from './insurance-config/insurance-config.module';
+import { StandardWorkingHoursModule } from './standard-working-hours/standard-working-hours.module';
 
 @Module({
   imports: [
@@ -65,6 +69,10 @@ import { AttendanceSeeder } from './database/seeds/attendance.seeder';
     ContractTypesModule,
     PayslipsModule,
     OvertimeModule,
+    DependentsModule,
+    TaxConfigModule,
+    InsuranceConfigModule,
+    StandardWorkingHoursModule,
   ],
   providers: [
     RoleSeeder,

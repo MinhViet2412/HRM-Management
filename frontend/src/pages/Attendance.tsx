@@ -8,7 +8,12 @@ import { useAuth } from '../hooks/useAuth'
 
 const Attendance = () => {
   const [selectedDate] = useState(new Date().toISOString().split('T')[0])
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+  // Default to current month for admin view
+  const getFirstDayOfMonth = () => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  }
+  const [startDate, setStartDate] = useState(getFirstDayOfMonth())
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
   const [selectedDepartment, setSelectedDepartment] = useState('')
   // Employee self view filters
