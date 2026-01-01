@@ -16,12 +16,22 @@ const employee_entity_1 = require("../database/entities/employee.entity");
 const attendance_entity_1 = require("../database/entities/attendance.entity");
 const contract_entity_1 = require("../database/entities/contract.entity");
 const overtime_request_entity_1 = require("../database/entities/overtime-request.entity");
+const insurance_config_module_1 = require("../insurance-config/insurance-config.module");
+const tax_config_module_1 = require("../tax-config/tax-config.module");
+const dependents_module_1 = require("../dependents/dependents.module");
+const standard_working_hours_module_1 = require("../standard-working-hours/standard-working-hours.module");
 let PayrollModule = class PayrollModule {
 };
 exports.PayrollModule = PayrollModule;
 exports.PayrollModule = PayrollModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([payroll_entity_1.Payroll, employee_entity_1.Employee, attendance_entity_1.Attendance, contract_entity_1.Contract, overtime_request_entity_1.OvertimeRequest])],
+        imports: [
+            typeorm_1.TypeOrmModule.forFeature([payroll_entity_1.Payroll, employee_entity_1.Employee, attendance_entity_1.Attendance, contract_entity_1.Contract, overtime_request_entity_1.OvertimeRequest]),
+            insurance_config_module_1.InsuranceConfigModule,
+            tax_config_module_1.TaxConfigModule,
+            dependents_module_1.DependentsModule,
+            standard_working_hours_module_1.StandardWorkingHoursModule,
+        ],
         providers: [payroll_service_1.PayrollService],
         controllers: [payroll_controller_1.PayrollController],
         exports: [payroll_service_1.PayrollService],

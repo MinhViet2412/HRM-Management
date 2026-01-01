@@ -6,6 +6,7 @@ import { LeaveRequest } from './leave-request.entity';
 import { Payroll } from './payroll.entity';
 import { WorkLocation } from './work-location.entity';
 import { Shift } from './shift.entity';
+import { Dependent } from './dependent.entity';
 export declare enum EmployeeStatus {
     ACTIVE = "active",
     INACTIVE = "inactive",
@@ -59,4 +60,5 @@ export declare class Employee {
     shiftId: string;
     leaveRequests: LeaveRequest[];
     payrolls: Payroll[];
+    dependents: Dependent[];
 }

@@ -65,14 +65,18 @@ let AttendanceService = class AttendanceService {
                 status = attendance_entity_1.AttendanceStatus.PRESENT;
         }
         if (employee.workLocation) {
+            if (!checkInDto.latitude || !checkInDto.longitude) {
+                throw new common_1.BadRequestException('Missing latitude/longitude for geo check-in. Please enable location access and try again.');
+            }
             const { latitude: wlLat, longitude: wlLng, radius } = employee.workLocation;
-            const { latitude: lat, longitude: lng } = checkInDto;
-            if (typeof lat !== 'number' || typeof lng !== 'number') {
-                throw new common_1.BadRequestException('Missing latitude/longitude for geo check-in');
+            const lat = Number(checkInDto.latitude);
+            const lng = Number(checkInDto.longitude);
+            if (isNaN(lat) || isNaN(lng)) {
+                throw new common_1.BadRequestException('Invalid latitude/longitude format');
             }
             const distance = this.calculateDistanceMeters(Number(wlLat), Number(wlLng), lat, lng);
             if (distance > radius) {
-                throw new common_1.BadRequestException('You are not within the allowed work location radius');
+                throw new common_1.BadRequestException(`You are not within the allowed work location radius. Current distance: ${Math.round(distance)}m, allowed radius: ${radius}m`);
             }
         }
         if (existingAttendance) {
@@ -173,6 +177,10 @@ let AttendanceService = class AttendanceService {
     async checkOut(employeeId, checkOutDto) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        const employee = await this.employeeRepository.findOne({
+            where: { id: employeeId },
+            relations: ['workLocation'],
+        });
         const attendance = await this.attendanceRepository.findOne({
             where: {
                 employeeId,
@@ -189,6 +197,21 @@ let AttendanceService = class AttendanceService {
             throw new common_1.ConflictException('Already checked out today');
         }
         const checkOutTime = checkOutDto.checkOutTime || new Date();
+        if (employee.workLocation) {
+            if (!checkOutDto.latitude || !checkOutDto.longitude) {
+                throw new common_1.BadRequestException('Missing latitude/longitude for geo check-out. Please enable location access and try again.');
+            }
+            const { latitude: wlLat, longitude: wlLng, radius } = employee.workLocation;
+            const lat = Number(checkOutDto.latitude);
+            const lng = Number(checkOutDto.longitude);
+            if (isNaN(lat) || isNaN(lng)) {
+                throw new common_1.BadRequestException('Invalid latitude/longitude format');
+            }
+            const distance = this.calculateDistanceMeters(Number(wlLat), Number(wlLng), lat, lng);
+            if (distance > radius) {
+                throw new common_1.BadRequestException(`You are not within the allowed work location radius. Current distance: ${Math.round(distance)}m, allowed radius: ${radius}m`);
+            }
+        }
         attendance.checkOut = checkOutTime;
         const evaluation = this.attendanceRuleEngine.evaluateAttendance(attendance.checkIn, checkOutTime);
         switch (evaluation.status) {

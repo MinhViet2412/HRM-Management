@@ -32,6 +32,7 @@ import { DependentsModule } from './dependents/dependents.module';
 import { TaxConfigModule } from './tax-config/tax-config.module';
 import { InsuranceConfigModule } from './insurance-config/insurance-config.module';
 import { StandardWorkingHoursModule } from './standard-working-hours/standard-working-hours.module';
+import { LeaveLimitConfigModule } from './leave-limit-config/leave-limit-config.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { StandardWorkingHoursModule } from './standard-working-hours/standard-wo
     TaxConfigModule,
     InsuranceConfigModule,
     StandardWorkingHoursModule,
+    LeaveLimitConfigModule,
   ],
   providers: [
     RoleSeeder,

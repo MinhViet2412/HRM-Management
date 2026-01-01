@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { LeaveRequest, LeaveType, LeaveStatus } from '../database/entities/leave-request.entity';
 import { Employee } from '../database/entities/employee.entity';
+import { LeaveLimitConfigService } from '../leave-limit-config/leave-limit-config.service';
 
 @Injectable()
 export class LeaveService {
@@ -11,6 +12,7 @@ export class LeaveService {
     private leaveRequestRepository: Repository<LeaveRequest>,
     @InjectRepository(Employee)
     private employeeRepository: Repository<Employee>,
+    private leaveLimitConfigService: LeaveLimitConfigService,
   ) {}
 
   async createLeaveRequest(employeeId: string, createLeaveRequestDto: any): Promise<LeaveRequest> {
@@ -20,6 +22,14 @@ export class LeaveService {
 
     if (!employee) {
       throw new NotFoundException('Employee not found');
+    }
+
+    // Validate leave type - only allow 4 types: annual, sick, maternity, unpaid
+    const allowedTypes = [LeaveType.ANNUAL, LeaveType.SICK, LeaveType.MATERNITY, LeaveType.UNPAID];
+    if (!allowedTypes.includes(createLeaveRequestDto.type)) {
+      throw new BadRequestException(
+        `Invalid leave type. Allowed types are: ${allowedTypes.join(', ')}`
+      );
     }
 
     // Normalize to date-only (00:00)
@@ -38,6 +48,46 @@ export class LeaveService {
     // Calculate days
     const timeDiff = endDate.getTime() - startDate.getTime();
     const days = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+
+    // Check leave limit for the year
+    const year = startDate.getFullYear();
+    const maxDays = await this.leaveLimitConfigService.getMaxDays(
+      createLeaveRequestDto.type,
+      year,
+    );
+
+    if (maxDays !== null) {
+      // Get total approved leave days for this type in this year
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year, 11, 31);
+      const existingLeaves = await this.leaveRequestRepository.find({
+        where: {
+          employeeId,
+          type: createLeaveRequestDto.type,
+          status: LeaveStatus.APPROVED,
+          startDate: Between(yearStart, yearEnd),
+        },
+      });
+
+      const totalUsedDays = existingLeaves.reduce(
+        (sum, leave) => sum + Number(leave.days || 0),
+        0,
+      );
+
+      // If employee has already used all or more than the limit, don't allow creating new leave request
+      if (totalUsedDays >= maxDays) {
+        throw new BadRequestException(
+          `Cannot create leave request. You have already reached the maximum limit of ${maxDays} days for ${createLeaveRequestDto.type} leave in ${year}. Already used: ${totalUsedDays} days.`,
+        );
+      }
+
+      // If adding this request would exceed the limit, don't allow
+      if (totalUsedDays + days > maxDays) {
+        throw new BadRequestException(
+          `Cannot create leave request. This would exceed the leave limit. Maximum ${maxDays} days allowed for ${createLeaveRequestDto.type} leave in ${year}. Already used: ${totalUsedDays} days. Requested: ${days} days.`,
+        );
+      }
+    }
 
     const leaveRequest = this.leaveRequestRepository.create({
       employeeId,
@@ -93,17 +143,59 @@ export class LeaveService {
       throw new NotFoundException('Employee not found');
     }
 
-    const days = Number(leaveRequest.days)
+    const days = Number(leaveRequest.days);
+    const year = leaveRequest.startDate.getFullYear();
+
+    // Check leave limit for the year
+    const maxDays = await this.leaveLimitConfigService.getMaxDays(
+      leaveRequest.type,
+      year,
+    );
+
+    if (maxDays !== null) {
+      // Get total approved leave days for this type in this year (excluding current request)
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year, 11, 31);
+      const existingLeaves = await this.leaveRequestRepository.find({
+        where: {
+          employeeId: leaveRequest.employeeId,
+          type: leaveRequest.type,
+          status: LeaveStatus.APPROVED,
+          startDate: Between(yearStart, yearEnd),
+        },
+      });
+
+      const totalUsedDays = existingLeaves.reduce(
+        (sum, leave) => sum + Number(leave.days || 0),
+        0,
+      );
+
+      // If employee has already reached the limit, don't allow approving
+      if (totalUsedDays >= maxDays) {
+        throw new BadRequestException(
+          `Cannot approve: Employee has already reached the maximum limit of ${maxDays} days for ${leaveRequest.type} leave in ${year}. Already used: ${totalUsedDays} days.`,
+        );
+      }
+
+      // If approving this request would exceed the limit, don't allow
+      if (totalUsedDays + days > maxDays) {
+        throw new BadRequestException(
+          `Cannot approve: This would exceed the leave limit. Maximum ${maxDays} days allowed for ${leaveRequest.type} leave in ${year}. Already used: ${totalUsedDays} days. Requested: ${days} days.`,
+        );
+      }
+    }
+
+    // Deduct balance based on type (for annual and sick leave)
     if (leaveRequest.type === LeaveType.ANNUAL) {
       if (Number(employee.annualLeaveBalance || 0) < days) {
         throw new BadRequestException('Not enough annual leave balance');
       }
-      employee.annualLeaveBalance = Number(employee.annualLeaveBalance || 0) - days
+      employee.annualLeaveBalance = Number(employee.annualLeaveBalance || 0) - days;
     } else if (leaveRequest.type === LeaveType.SICK) {
       if (Number(employee.sickLeaveBalance || 0) < days) {
         throw new BadRequestException('Not enough sick leave balance');
       }
-      employee.sickLeaveBalance = Number(employee.sickLeaveBalance || 0) - days
+      employee.sickLeaveBalance = Number(employee.sickLeaveBalance || 0) - days;
     }
 
     leaveRequest.status = LeaveStatus.APPROVED;

@@ -62,8 +62,8 @@ let AttendanceController = class AttendanceController {
         return this.attendanceService.getAttendanceByDate(new Date(date));
     }
     async getAttendanceWithFilters(startDate, endDate, departmentId) {
-        const start = startDate ? new Date(startDate) : new Date();
-        const end = endDate ? new Date(endDate) : new Date();
+        const start = startDate ? new Date(startDate + 'T00:00:00') : new Date();
+        const end = endDate ? new Date(endDate + 'T23:59:59') : new Date();
         return this.attendanceService.getAttendanceWithFilters(start, end, departmentId);
     }
     async closeMissingCheckout(employeeId, date, req) {

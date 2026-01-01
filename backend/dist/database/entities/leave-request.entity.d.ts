@@ -2,10 +2,7 @@ import { Employee } from './employee.entity';
 export declare enum LeaveType {
     ANNUAL = "annual",
     SICK = "sick",
-    PERSONAL = "personal",
     MATERNITY = "maternity",
-    PATERNITY = "paternity",
-    EMERGENCY = "emergency",
     UNPAID = "unpaid"
 }
 export declare enum LeaveStatus {

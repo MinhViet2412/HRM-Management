@@ -1,0 +1,540 @@
+================================================================================
+                    HRM MANAGEMENT SYSTEM - DATABASE ERD
+================================================================================
+
+Tổng quan: Hệ thống quản lý nhân sự (HRM) với các module chính:
+- Quản lý nhân sự (Users, Employees, Departments, Positions)
+- Chấm công và nghỉ phép (Attendance, Leave Requests, Overtime)
+- Tính lương (Payroll, Payslips)
+- Hợp đồng lao động (Contracts, Contract Types)
+- Báo cáo và audit (Audit Logs)
+
+================================================================================
+                                ENTITIES
+================================================================================
+
+1. ROLES (Bảng vai trò)
+-----------------------
+Table: roles
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - name: ENUM (admin, hr, manager, employee) - Unique
+  - description: TEXT (nullable)
+  - permissions: TEXT[] (array of permissions)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - One-to-Many: roles -> users (1 role có nhiều users)
+
+2. USERS (Bảng người dùng)
+--------------------------
+Table: users
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - email: VARCHAR (unique)
+  - password: VARCHAR
+  - firstName: VARCHAR (nullable)
+  - lastName: VARCHAR (nullable)
+  - phone: VARCHAR (nullable)
+  - status: ENUM (active, inactive, suspended) - default: active
+  - lastLoginAt: TIMESTAMP (nullable)
+  - refreshToken: VARCHAR (nullable)
+  - refreshTokenExpiresAt: TIMESTAMP (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+  - roleId: UUID (Foreign Key -> roles.id)
+
+Relationships:
+  - Many-to-One: users -> roles (nhiều users thuộc 1 role)
+  - One-to-One: users -> employees (1 user có thể có 1 employee record)
+
+3. DEPARTMENTS (Bảng phòng ban)
+------------------------------
+Table: departments
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - code: VARCHAR (unique)
+  - name: VARCHAR
+  - description: TEXT (nullable)
+  - managerId: UUID (nullable) - ID của manager
+  - parentId: UUID (nullable) - Foreign Key -> departments.id (self-reference)
+  - isActive: BOOLEAN (default: true)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - One-to-Many: departments -> employees (1 department có nhiều employees)
+  - One-to-Many: departments -> positions (1 department có nhiều positions)
+  - Self-Reference: departments -> departments (parent-child hierarchy)
+
+4. POSITIONS (Bảng vị trí)
+-------------------------
+Table: positions
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - code: VARCHAR (unique)
+  - title: VARCHAR
+  - description: TEXT (nullable)
+  - minSalary: DECIMAL(10,2) (nullable)
+  - maxSalary: DECIMAL(10,2) (nullable)
+  - isActive: BOOLEAN (default: true)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+  - departmentId: UUID (nullable) - Foreign Key -> departments.id
+
+Relationships:
+  - Many-to-One: positions -> departments (nhiều positions thuộc 1 department)
+  - One-to-Many: positions -> employees (1 position có nhiều employees)
+
+5. WORK_LOCATIONS (Bảng địa điểm làm việc)
+------------------------------------------
+Table: work_locations
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - name: VARCHAR (unique)
+  - address: VARCHAR (nullable)
+  - latitude: DECIMAL(10,7)
+  - longitude: DECIMAL(10,7)
+  - radius: INTEGER (default: 100) - meters
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - One-to-Many: work_locations -> employees (1 location có nhiều employees)
+
+6. SHIFTS (Bảng ca làm việc)
+---------------------------
+Table: shifts
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - name: VARCHAR (unique)
+  - startTime: VARCHAR (HH:mm format)
+  - endTime: VARCHAR (HH:mm format)
+  - lunchBreakStart: VARCHAR (nullable, HH:mm format)
+  - lunchBreakEnd: VARCHAR (nullable, HH:mm format)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - One-to-Many: shifts -> employees (1 shift có nhiều employees)
+
+7. EMPLOYEES (Bảng nhân viên)
+-----------------------------
+Table: employees
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - employeeCode: VARCHAR (unique)
+  - firstName: VARCHAR
+  - lastName: VARCHAR
+  - email: VARCHAR (unique)
+  - phone: VARCHAR (nullable)
+  - address: VARCHAR (nullable)
+  - permanentAddress: VARCHAR (nullable)
+  - currentAddress: VARCHAR (nullable)
+  - dateOfBirth: DATE (nullable)
+  - gender: ENUM (male, female, other) (nullable)
+  - nationalId: VARCHAR (nullable)
+  - citizenId: VARCHAR (nullable)
+  - taxId: VARCHAR (nullable)
+  - bankAccount: VARCHAR (nullable)
+  - bankName: VARCHAR (nullable)
+  - ethnicity: VARCHAR (nullable)
+  - religion: VARCHAR (nullable)
+  - basicSalary: DECIMAL(10,2) (nullable)
+  - allowance: DECIMAL(10,2) (nullable)
+  - hireDate: DATE (nullable)
+  - terminationDate: DATE (nullable)
+  - status: ENUM (active, inactive, terminated) - default: active
+  - avatar: VARCHAR (nullable)
+  - emergencyContact: VARCHAR (nullable)
+  - emergencyPhone: VARCHAR (nullable)
+  - annualLeaveBalance: DECIMAL(5,2) (default: 12)
+  - sickLeaveBalance: DECIMAL(5,2) (default: 6)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+  - departmentId: UUID (Foreign Key -> departments.id)
+  - positionId: UUID (Foreign Key -> positions.id)
+  - workLocationId: UUID (nullable) - Foreign Key -> work_locations.id
+  - shiftId: UUID (nullable) - Foreign Key -> shifts.id
+  - userId: UUID (nullable) - Foreign Key -> users.id
+
+Relationships:
+  - One-to-One: employees -> users (1 employee có thể có 1 user account)
+  - Many-to-One: employees -> departments (nhiều employees thuộc 1 department)
+  - Many-to-One: employees -> positions (nhiều employees thuộc 1 position)
+  - Many-to-One: employees -> work_locations (nhiều employees thuộc 1 location)
+  - Many-to-One: employees -> shifts (nhiều employees thuộc 1 shift)
+  - One-to-Many: employees -> attendances (1 employee có nhiều attendance records)
+  - One-to-Many: employees -> leave_requests (1 employee có nhiều leave requests)
+  - One-to-Many: employees -> payrolls (1 employee có nhiều payroll records)
+  - One-to-Many: employees -> contracts (1 employee có nhiều contracts)
+  - One-to-Many: employees -> overtime_requests (1 employee có nhiều OT requests)
+
+8. ATTENDANCES (Bảng chấm công)
+------------------------------
+Table: attendances
+Primary Key: id (UUID)
+Index: (employeeId, date) - unique
+Fields:
+  - id: UUID (Primary Key)
+  - employeeId: UUID (Foreign Key -> employees.id)
+  - date: DATE
+  - checkIn: TIMESTAMP (nullable)
+  - checkOut: TIMESTAMP (nullable)
+  - breakStart: TIMESTAMP (nullable)
+  - breakEnd: TIMESTAMP (nullable)
+  - workingHours: DECIMAL(5,2) (default: 0)
+  - overtimeHours: DECIMAL(5,2) (default: 0)
+  - status: ENUM (present, absent, late, half_day, early_leave) - default: absent
+  - notes: VARCHAR (nullable)
+  - approvedBy: VARCHAR (nullable)
+  - approvedAt: TIMESTAMP (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: attendances -> employees (nhiều attendance records thuộc 1 employee)
+
+9. LEAVE_REQUESTS (Bảng đăng ký nghỉ phép)
+-----------------------------------------
+Table: leave_requests
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - employeeId: UUID (Foreign Key -> employees.id)
+  - type: ENUM (annual, sick, personal, maternity, paternity, emergency, unpaid)
+  - startDate: DATE
+  - endDate: DATE
+  - days: DECIMAL(5,2)
+  - reason: VARCHAR (nullable)
+  - notes: VARCHAR (nullable)
+  - status: ENUM (pending, approved, rejected, cancelled) - default: pending
+  - approvedBy: VARCHAR (nullable)
+  - approvedAt: TIMESTAMP (nullable)
+  - rejectionReason: VARCHAR (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: leave_requests -> employees (nhiều leave requests thuộc 1 employee)
+
+10. OVERTIME_REQUESTS (Bảng đăng ký làm thêm giờ)
+------------------------------------------------
+Table: overtime_requests
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - employeeId: UUID (Foreign Key -> employees.id)
+  - date: DATE
+  - startTime: TIME
+  - endTime: TIME
+  - hours: DECIMAL(5,2)
+  - reason: TEXT (nullable)
+  - status: ENUM (pending, approved, rejected) - default: pending
+  - approverId: VARCHAR (nullable)
+  - approvedAt: TIMESTAMP (nullable)
+  - rejectionReason: TEXT (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: overtime_requests -> employees (nhiều OT requests thuộc 1 employee)
+
+11. CONTRACT_TYPES (Bảng loại hợp đồng)
+--------------------------------------
+Table: contract_types
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - name: VARCHAR (unique)
+  - description: TEXT (nullable)
+  - standardTermMonths: INTEGER (nullable)
+  - probationMonths: INTEGER (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - One-to-Many: contract_types -> contracts (1 contract type có nhiều contracts)
+  - One-to-Many: contract_types -> contract_templates (1 contract type có nhiều templates)
+
+12. CONTRACTS (Bảng hợp đồng lao động)
+------------------------------------
+Table: contracts
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - contractCode: VARCHAR (unique)
+  - employeeId: UUID (Foreign Key -> employees.id)
+  - typeId: UUID (nullable) - Foreign Key -> contract_types.id
+  - startDate: DATE
+  - endDate: DATE (nullable)
+  - status: ENUM (active, expired, terminated, pending) - default: pending
+  - baseSalary: DECIMAL(12,2)
+  - allowance: DECIMAL(12,2) (default: 0)
+  - bonus: DECIMAL(12,2) (default: 0)
+  - benefits: JSON (nullable)
+  - notes: TEXT (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: contracts -> employees (nhiều contracts thuộc 1 employee)
+  - Many-to-One: contracts -> contract_types (nhiều contracts thuộc 1 contract type)
+
+13. CONTRACT_TEMPLATES (Bảng mẫu hợp đồng)
+----------------------------------------
+Table: contract_templates
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - name: VARCHAR
+  - content: TEXT
+  - typeId: UUID (nullable) - Foreign Key -> contract_types.id
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: contract_templates -> contract_types (nhiều templates thuộc 1 contract type)
+
+14. PAYROLLS (Bảng tính lương)
+-----------------------------
+Table: payrolls
+Primary Key: id (UUID)
+Index: (employeeId, period) - unique
+Fields:
+  - id: UUID (Primary Key)
+  - employeeId: UUID (Foreign Key -> employees.id)
+  - period: VARCHAR(7) (YYYY-MM format)
+  - basicSalary: DECIMAL(10,2)
+  - allowance: DECIMAL(10,2) (default: 0)
+  - overtimePay: DECIMAL(10,2) (default: 0)
+  - bonus: DECIMAL(10,2) (default: 0)
+  - grossSalary: DECIMAL(10,2) (default: 0)
+  - tax: DECIMAL(10,2) (default: 0)
+  - socialInsurance: DECIMAL(10,2) (default: 0)
+  - healthInsurance: DECIMAL(10,2) (default: 0)
+  - unemploymentInsurance: DECIMAL(10,2) (default: 0)
+  - totalDeductions: DECIMAL(10,2) (default: 0)
+  - netSalary: DECIMAL(10,2)
+  - workingDays: DECIMAL(5,2)
+  - actualWorkingDays: DECIMAL(5,2)
+  - status: ENUM (draft, generated, approved, paid) - default: draft
+  - notes: VARCHAR (nullable)
+  - approvedBy: VARCHAR (nullable)
+  - approvedAt: TIMESTAMP (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: payrolls -> employees (nhiều payroll records thuộc 1 employee)
+  - One-to-Many: payrolls -> payslips (1 payroll có thể có nhiều payslips)
+
+15. PAYSLIPS (Bảng phiếu lương)
+------------------------------
+Table: payslips
+Primary Key: id (UUID)
+Index: (employeeId, period) - unique
+Fields:
+  - id: UUID (Primary Key)
+  - employeeId: UUID (Foreign Key -> employees.id)
+  - period: VARCHAR(7) (YYYY-MM)
+  - payrollId: UUID (nullable) - Foreign Key -> payrolls.id
+  - amount: DECIMAL(10,2) (net salary amount)
+  - status: ENUM (issued, paid, cancelled) - default: issued
+  - issuedBy: VARCHAR (nullable)
+  - paidAt: TIMESTAMP (nullable)
+  - notes: VARCHAR (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: payslips -> employees (nhiều payslips thuộc 1 employee)
+  - Many-to-One: payslips -> payrolls (nhiều payslips thuộc 1 payroll)
+
+16. RESIGNATION_REQUESTS (Bảng đăng ký nghỉ việc)
+-----------------------------------------------
+Table: resignation_requests
+Primary Key: id (UUID)
+Fields:
+  - id: UUID (Primary Key)
+  - employeeId: UUID (Foreign Key -> employees.id)
+  - requestedById: UUID (Foreign Key -> users.id)
+  - effectiveDate: DATE
+  - reason: TEXT (nullable)
+  - status: ENUM (pending, approved, rejected, processed) - default: pending
+  - approvedById: UUID (nullable) - Foreign Key -> users.id
+  - approvedAt: TIMESTAMP (nullable)
+  - createdAt: TIMESTAMP
+  - updatedAt: TIMESTAMP
+
+Relationships:
+  - Many-to-One: resignation_requests -> employees (nhiều resignation requests thuộc 1 employee)
+  - Many-to-One: resignation_requests -> users (requestedBy) (nhiều requests được tạo bởi 1 user)
+  - Many-to-One: resignation_requests -> users (approvedBy) (nhiều requests được approve bởi 1 user)
+
+17. AUDIT_LOGS (Bảng nhật ký audit)
+----------------------------------
+Table: audit_logs
+Primary Key: id (UUID)
+Indexes: (entityType, entityId), (userId), (createdAt)
+Fields:
+  - id: UUID (Primary Key)
+  - userId: VARCHAR (nullable)
+  - userEmail: VARCHAR (nullable)
+  - action: ENUM (create, update, delete, login, logout, export, import)
+  - entityType: VARCHAR (nullable)
+  - entityId: VARCHAR (nullable)
+  - oldValues: JSONB (nullable)
+  - newValues: JSONB (nullable)
+  - ipAddress: VARCHAR (nullable)
+  - userAgent: VARCHAR (nullable)
+  - description: VARCHAR (nullable)
+  - createdAt: TIMESTAMP
+
+Relationships:
+  - No direct foreign key relationships (audit trail)
+
+================================================================================
+                            RELATIONSHIP SUMMARY
+================================================================================
+
+CORE ENTITIES:
+- Users (1:1) -> Employees
+- Roles (1:N) -> Users
+- Departments (1:N) -> Employees
+- Departments (1:N) -> Positions
+- Positions (1:N) -> Employees
+- Work Locations (1:N) -> Employees
+- Shifts (1:N) -> Employees
+
+ATTENDANCE & LEAVE:
+- Employees (1:N) -> Attendances
+- Employees (1:N) -> Leave Requests
+- Employees (1:N) -> Overtime Requests
+
+CONTRACTS:
+- Employees (1:N) -> Contracts
+- Contract Types (1:N) -> Contracts
+- Contract Types (1:N) -> Contract Templates
+
+PAYROLL:
+- Employees (1:N) -> Payrolls
+- Employees (1:N) -> Payslips
+- Payrolls (1:N) -> Payslips
+
+RESIGNATION:
+- Employees (1:N) -> Resignation Requests
+- Users (1:N) -> Resignation Requests (as requester)
+- Users (1:N) -> Resignation Requests (as approver)
+
+HIERARCHICAL:
+- Departments (self-reference: parent-child)
+
+================================================================================
+                              ENUMS & CONSTRAINTS
+================================================================================
+
+ENUMS:
+- RoleName: admin, hr, manager, employee
+- UserStatus: active, inactive, suspended
+- EmployeeStatus: active, inactive, terminated
+- Gender: male, female, other
+- AttendanceStatus: present, absent, late, half_day, early_leave
+- LeaveType: annual, sick, personal, maternity, paternity, emergency, unpaid
+- LeaveStatus: pending, approved, rejected, cancelled
+- OvertimeStatus: pending, approved, rejected
+- ContractStatus: active, expired, terminated, pending
+- PayrollStatus: draft, generated, approved, paid
+- PayslipStatus: issued, paid, cancelled
+- ResignationStatus: pending, approved, rejected, processed
+- AuditAction: create, update, delete, login, logout, export, import
+
+UNIQUE CONSTRAINTS:
+- roles.name
+- users.email
+- employees.employeeCode
+- employees.email
+- departments.code
+- positions.code
+- work_locations.name
+- shifts.name
+- contracts.contractCode
+- contract_types.name
+- attendances(employeeId, date)
+- payrolls(employeeId, period)
+- payslips(employeeId, period)
+
+INDEXES:
+- attendances(employeeId, date) - unique
+- payrolls(employeeId, period) - unique
+- payslips(employeeId, period) - unique
+- audit_logs(entityType, entityId)
+- audit_logs(userId)
+- audit_logs(createdAt)
+
+================================================================================
+                              BUSINESS RULES
+================================================================================
+
+1. Mỗi Employee có thể có hoặc không có User account
+2. Mỗi User chỉ có thể liên kết với một Employee
+3. Employee phải thuộc về một Department và một Position
+4. Attendance records được tạo theo ngày và employee (unique constraint)
+5. Payroll records được tạo theo tháng và employee (unique constraint)
+6. Payslip records được tạo theo tháng và employee (unique constraint)
+7. Department có thể có cấu trúc phân cấp (parent-child)
+8. Contract có thể có hoặc không có ContractType
+9. Overtime và Leave requests cần được approve
+10. Audit logs ghi lại tất cả các thay đổi quan trọng
+
+================================================================================
+                              DATA TYPES
+================================================================================
+
+PRIMARY KEYS: UUID (Universally Unique Identifier)
+FOREIGN KEYS: UUID
+TIMESTAMPS: TIMESTAMP
+DATES: DATE
+TIMES: TIME hoặc VARCHAR (HH:mm format)
+DECIMAL: DECIMAL(precision, scale) cho tiền tệ và số liệu
+ENUMS: ENUM cho các giá trị cố định
+JSON: JSONB cho dữ liệu có cấu trúc phức tạp
+TEXT: TEXT cho nội dung dài
+VARCHAR: VARCHAR cho chuỗi ngắn
+
+================================================================================
+                              SECURITY CONSIDERATIONS
+================================================================================
+
+1. Passwords được hash bằng bcrypt
+2. JWT tokens cho authentication
+3. Refresh tokens cho session management
+4. Role-based access control (RBAC)
+5. Audit logging cho tất cả các thay đổi quan trọng
+6. Soft delete pattern có thể được implement
+7. Data encryption cho thông tin nhạy cảm
+
+================================================================================
+                              PERFORMANCE CONSIDERATIONS
+================================================================================
+
+1. Indexes trên các foreign keys và unique constraints
+2. Composite indexes cho các queries phổ biến
+3. Pagination cho các danh sách lớn
+4. Caching cho dữ liệu ít thay đổi
+5. Database connection pooling
+6. Query optimization cho các báo cáo phức tạp
+
+================================================================================
+                              EXPORT DATE: 2025-01-25
+                              SYSTEM: HRM Management System
+                              VERSION: 1.0.0
+================================================================================

@@ -27,6 +27,6 @@ export declare class CreateEmployeeDto {
     emergencyPhone?: string;
     departmentId: string;
     positionId: string;
-    workLocationId?: string;
-    shiftId?: string;
+    workLocationId?: string | null;
+    shiftId?: string | null;
 }

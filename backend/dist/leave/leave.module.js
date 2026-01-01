@@ -13,12 +13,16 @@ const leave_service_1 = require("./leave.service");
 const leave_controller_1 = require("./leave.controller");
 const leave_request_entity_1 = require("../database/entities/leave-request.entity");
 const employee_entity_1 = require("../database/entities/employee.entity");
+const leave_limit_config_module_1 = require("../leave-limit-config/leave-limit-config.module");
 let LeaveModule = class LeaveModule {
 };
 exports.LeaveModule = LeaveModule;
 exports.LeaveModule = LeaveModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([leave_request_entity_1.LeaveRequest, employee_entity_1.Employee])],
+        imports: [
+            typeorm_1.TypeOrmModule.forFeature([leave_request_entity_1.LeaveRequest, employee_entity_1.Employee]),
+            leave_limit_config_module_1.LeaveLimitConfigModule,
+        ],
         providers: [leave_service_1.LeaveService],
         controllers: [leave_controller_1.LeaveController],
         exports: [leave_service_1.LeaveService],

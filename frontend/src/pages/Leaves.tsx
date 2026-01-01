@@ -152,10 +152,7 @@ const Leaves = () => {
                   <span className="text-sm text-gray-500 flex items-center gap-3">
                     {leave.type === 'annual' && t('leaves.typeAnnual')}
                     {leave.type === 'sick' && t('leaves.typeSick')}
-                    {leave.type === 'personal' && t('leaves.typePersonal')}
                     {leave.type === 'maternity' && t('leaves.typeMaternity')}
-                    {leave.type === 'paternity' && t('leaves.typePaternity')}
-                    {leave.type === 'emergency' && t('leaves.typeEmergency')}
                     {leave.type === 'unpaid' && t('leaves.typeUnpaid')}
                     {(leave.type === 'annual') && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
@@ -202,10 +199,7 @@ const Leaves = () => {
                   <span className="text-sm text-gray-500">
                     {leave.type === 'annual' && t('leaves.typeAnnual')}
                     {leave.type === 'sick' && t('leaves.typeSick')}
-                    {leave.type === 'personal' && t('leaves.typePersonal')}
                     {leave.type === 'maternity' && t('leaves.typeMaternity')}
-                    {leave.type === 'paternity' && t('leaves.typePaternity')}
-                    {leave.type === 'emergency' && t('leaves.typeEmergency')}
                     {leave.type === 'unpaid' && t('leaves.typeUnpaid')}
                   </span>
                 </div>
@@ -309,10 +303,7 @@ const LeaveRequestForm = ({ onSubmit, onCancel, isLoading }: any) => {
             >
               <option value="annual">{t('leaves.typeAnnual')}</option>
               <option value="sick">{t('leaves.typeSick')}</option>
-              <option value="personal">{t('leaves.typePersonal')}</option>
               <option value="maternity">{t('leaves.typeMaternity')}</option>
-              <option value="paternity">{t('leaves.typePaternity')}</option>
-              <option value="emergency">{t('leaves.typeEmergency')}</option>
               <option value="unpaid">{t('leaves.typeUnpaid')}</option>
             </select>
           </div>

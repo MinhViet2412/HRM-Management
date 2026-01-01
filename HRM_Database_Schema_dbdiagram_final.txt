@@ -1,0 +1,264 @@
+Table roles {
+  id uuid [pk]
+  name varchar(50) [not null, unique]
+  description text
+  permissions text[]
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table users {
+  id uuid [pk]
+  email varchar(255) [not null, unique]
+  password varchar(255) [not null]
+  firstName varchar(100)
+  lastName varchar(100)
+  phone varchar(20)
+  status varchar(20)
+  lastLoginAt timestamp
+  refreshToken varchar(500)
+  refreshTokenExpiresAt timestamp
+  createdAt timestamp
+  updatedAt timestamp
+  roleId uuid [not null, ref: > roles.id]
+}
+
+Table departments {
+  id uuid [pk]
+  code varchar(20) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  managerId uuid
+  parentId uuid [ref: > departments.id]
+  isActive boolean
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table positions {
+  id uuid [pk]
+  code varchar(20) [not null, unique]
+  title varchar(100) [not null]
+  description text
+  minSalary decimal(10,2)
+  maxSalary decimal(10,2)
+  isActive boolean
+  createdAt timestamp
+  updatedAt timestamp
+  departmentId uuid [ref: > departments.id]
+}
+
+Table work_locations {
+  id uuid [pk]
+  name varchar(100) [not null, unique]
+  address varchar(255)
+  latitude decimal(10,7) [not null]
+  longitude decimal(10,7) [not null]
+  radius integer
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table shifts {
+  id uuid [pk]
+  name varchar(50) [not null, unique]
+  startTime varchar(5) [not null]
+  endTime varchar(5) [not null]
+  lunchBreakStart varchar(5)
+  lunchBreakEnd varchar(5)
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table employees {
+  id uuid [pk]
+  employeeCode varchar(20) [not null, unique]
+  firstName varchar(100) [not null]
+  lastName varchar(100) [not null]
+  email varchar(255) [not null, unique]
+  phone varchar(20)
+  address varchar(255)
+  permanentAddress varchar(255)
+  currentAddress varchar(255)
+  dateOfBirth date
+  gender varchar(10)
+  nationalId varchar(50)
+  citizenId varchar(50)
+  taxId varchar(50)
+  bankAccount varchar(50)
+  bankName varchar(100)
+  ethnicity varchar(50)
+  religion varchar(50)
+  basicSalary decimal(10,2)
+  allowance decimal(10,2)
+  hireDate date
+  terminationDate date
+  status varchar(20)
+  avatar varchar(255)
+  emergencyContact varchar(100)
+  emergencyPhone varchar(20)
+  annualLeaveBalance decimal(5,2)
+  sickLeaveBalance decimal(5,2)
+  createdAt timestamp
+  updatedAt timestamp
+  departmentId uuid [not null, ref: > departments.id]
+  positionId uuid [not null, ref: > positions.id]
+  workLocationId uuid [ref: > work_locations.id]
+  shiftId uuid [ref: > shifts.id]
+  userId uuid [ref: > users.id]
+}
+
+Table attendances {
+  id uuid [pk]
+  employeeId uuid [not null, ref: > employees.id]
+  date date [not null]
+  checkIn timestamp
+  checkOut timestamp
+  breakStart timestamp
+  breakEnd timestamp
+  workingHours decimal(5,2)
+  overtimeHours decimal(5,2)
+  status varchar(20)
+  notes varchar(500)
+  approvedBy varchar(100)
+  approvedAt timestamp
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table leave_requests {
+  id uuid [pk]
+  employeeId uuid [not null, ref: > employees.id]
+  type varchar(20) [not null]
+  startDate date [not null]
+  endDate date [not null]
+  days decimal(5,2) [not null]
+  reason varchar(500)
+  notes varchar(500)
+  status varchar(20)
+  approvedBy varchar(100)
+  approvedAt timestamp
+  rejectionReason varchar(500)
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table overtime_requests {
+  id uuid [pk]
+  employeeId uuid [not null, ref: > employees.id]
+  date date [not null]
+  startTime time [not null]
+  endTime time [not null]
+  hours decimal(5,2) [not null]
+  reason text
+  status varchar(20)
+  approverId varchar(100)
+  approvedAt timestamp
+  rejectionReason text
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table contract_types {
+  id uuid [pk]
+  name varchar(100) [not null, unique]
+  description text
+  standardTermMonths integer
+  probationMonths integer
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table contracts {
+  id uuid [pk]
+  contractCode varchar(50) [not null, unique]
+  employeeId uuid [not null, ref: > employees.id]
+  typeId uuid [ref: > contract_types.id]
+  startDate date [not null]
+  endDate date
+  status varchar(20)
+  baseSalary decimal(12,2) [not null]
+  allowance decimal(12,2)
+  bonus decimal(12,2)
+  benefits jsonb
+  notes text
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table contract_templates {
+  id uuid [pk]
+  name varchar(100) [not null]
+  content text [not null]
+  typeId uuid [ref: > contract_types.id]
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table payrolls {
+  id uuid [pk]
+  employeeId uuid [not null, ref: > employees.id]
+  period varchar(7) [not null]
+  basicSalary decimal(10,2) [not null]
+  allowance decimal(10,2)
+  overtimePay decimal(10,2)
+  bonus decimal(10,2)
+  grossSalary decimal(10,2)
+  tax decimal(10,2)
+  socialInsurance decimal(10,2)
+  healthInsurance decimal(10,2)
+  unemploymentInsurance decimal(10,2)
+  totalDeductions decimal(10,2)
+  netSalary decimal(10,2) [not null]
+  workingDays decimal(5,2) [not null]
+  actualWorkingDays decimal(5,2) [not null]
+  status varchar(20)
+  notes varchar(500)
+  approvedBy varchar(100)
+  approvedAt timestamp
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table payslips {
+  id uuid [pk]
+  employeeId uuid [not null, ref: > employees.id]
+  period varchar(7) [not null]
+  payrollId uuid [ref: > payrolls.id]
+  amount decimal(10,2) [not null]
+  status varchar(20)
+  issuedBy varchar(100)
+  paidAt timestamp
+  notes varchar(500)
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table resignation_requests {
+  id uuid [pk]
+  employeeId uuid [not null, ref: > employees.id]
+  requestedById uuid [not null, ref: > users.id]
+  effectiveDate date [not null]
+  reason text
+  status varchar(20)
+  approvedById uuid [ref: > users.id]
+  approvedAt timestamp
+  createdAt timestamp
+  updatedAt timestamp
+}
+
+Table audit_logs {
+  id uuid [pk]
+  userId varchar(100)
+  userEmail varchar(255)
+  action varchar(20) [not null]
+  entityType varchar(100)
+  entityId varchar(100)
+  oldValues jsonb
+  newValues jsonb
+  ipAddress varchar(45)
+  userAgent varchar(500)
+  description varchar(500)
+  createdAt timestamp
+}
+

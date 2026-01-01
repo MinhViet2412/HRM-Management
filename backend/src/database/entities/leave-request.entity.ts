@@ -10,13 +10,10 @@ import {
 import { Employee } from './employee.entity';
 
 export enum LeaveType {
-  ANNUAL = 'annual',
-  SICK = 'sick',
-  PERSONAL = 'personal',
-  MATERNITY = 'maternity',
-  PATERNITY = 'paternity',
-  EMERGENCY = 'emergency',
-  UNPAID = 'unpaid',
+  ANNUAL = 'annual',      // Nghỉ phép năm
+  SICK = 'sick',          // Nghỉ ốm
+  MATERNITY = 'maternity', // Nghỉ thai sản
+  UNPAID = 'unpaid',      // Nghỉ không lương
 }
 
 export enum LeaveStatus {

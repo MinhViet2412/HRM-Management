@@ -119,13 +119,13 @@ let EmployeesService = class EmployeesService {
     }
     async findAll() {
         return this.employeeRepository.find({
-            relations: ['department', 'position', 'user', 'workLocation'],
+            relations: ['department', 'position', 'user', 'workLocation', 'shift', 'dependents'],
         });
     }
     async findOne(id) {
         const employee = await this.employeeRepository.findOne({
             where: { id },
-            relations: ['department', 'position', 'user', 'workLocation'],
+            relations: ['department', 'position', 'user', 'workLocation', 'shift', 'dependents'],
         });
         if (!employee) {
             throw new common_1.NotFoundException('Employee not found');
@@ -135,7 +135,7 @@ let EmployeesService = class EmployeesService {
     async findByCode(employeeCode) {
         const employee = await this.employeeRepository.findOne({
             where: { employeeCode },
-            relations: ['department', 'position', 'user'],
+            relations: ['department', 'position', 'user', 'workLocation', 'shift'],
         });
         if (!employee) {
             throw new common_1.NotFoundException('Employee not found');
@@ -176,20 +176,24 @@ let EmployeesService = class EmployeesService {
                 throw new common_1.BadRequestException('Position not found');
             }
         }
-        if (updateEmployeeDto.workLocationId) {
-            const workLocation = await this.workLocationRepository.findOne({
-                where: { id: updateEmployeeDto.workLocationId },
-            });
-            if (!workLocation) {
-                throw new common_1.BadRequestException('Work location not found');
+        if (updateEmployeeDto.workLocationId !== undefined) {
+            if (updateEmployeeDto.workLocationId) {
+                const workLocation = await this.workLocationRepository.findOne({
+                    where: { id: updateEmployeeDto.workLocationId },
+                });
+                if (!workLocation) {
+                    throw new common_1.BadRequestException('Work location not found');
+                }
             }
         }
-        if (updateEmployeeDto.shiftId) {
-            const shift = await this.shiftRepository.findOne({
-                where: { id: updateEmployeeDto.shiftId },
-            });
-            if (!shift) {
-                throw new common_1.BadRequestException('Shift not found');
+        if (updateEmployeeDto.shiftId !== undefined) {
+            if (updateEmployeeDto.shiftId) {
+                const shift = await this.shiftRepository.findOne({
+                    where: { id: updateEmployeeDto.shiftId },
+                });
+                if (!shift) {
+                    throw new common_1.BadRequestException('Shift not found');
+                }
             }
         }
         if (employee.user) {
@@ -231,7 +235,68 @@ let EmployeesService = class EmployeesService {
             const savedUser = await this.userRepository.save(user);
             employee.user = savedUser;
         }
-        Object.assign(employee, updateEmployeeDto);
+        const updateData = {};
+        if (updateEmployeeDto.employeeCode)
+            updateData.employeeCode = updateEmployeeDto.employeeCode;
+        if (updateEmployeeDto.firstName)
+            updateData.firstName = updateEmployeeDto.firstName;
+        if (updateEmployeeDto.lastName)
+            updateData.lastName = updateEmployeeDto.lastName;
+        if (updateEmployeeDto.email)
+            updateData.email = updateEmployeeDto.email;
+        if (updateEmployeeDto.phone !== undefined)
+            updateData.phone = updateEmployeeDto.phone;
+        if (updateEmployeeDto.address !== undefined)
+            updateData.address = updateEmployeeDto.address;
+        if (updateEmployeeDto.permanentAddress !== undefined)
+            updateData.permanentAddress = updateEmployeeDto.permanentAddress;
+        if (updateEmployeeDto.currentAddress !== undefined)
+            updateData.currentAddress = updateEmployeeDto.currentAddress;
+        if (updateEmployeeDto.dateOfBirth)
+            updateData.dateOfBirth = new Date(updateEmployeeDto.dateOfBirth);
+        if (updateEmployeeDto.gender)
+            updateData.gender = updateEmployeeDto.gender;
+        if (updateEmployeeDto.nationalId !== undefined)
+            updateData.nationalId = updateEmployeeDto.nationalId;
+        if (updateEmployeeDto.citizenId !== undefined)
+            updateData.citizenId = updateEmployeeDto.citizenId;
+        if (updateEmployeeDto.taxId !== undefined)
+            updateData.taxId = updateEmployeeDto.taxId;
+        if (updateEmployeeDto.bankAccount !== undefined)
+            updateData.bankAccount = updateEmployeeDto.bankAccount;
+        if (updateEmployeeDto.bankName !== undefined)
+            updateData.bankName = updateEmployeeDto.bankName;
+        if (updateEmployeeDto.ethnicity !== undefined)
+            updateData.ethnicity = updateEmployeeDto.ethnicity;
+        if (updateEmployeeDto.religion !== undefined)
+            updateData.religion = updateEmployeeDto.religion;
+        if (updateEmployeeDto.basicSalary !== undefined)
+            updateData.basicSalary = updateEmployeeDto.basicSalary;
+        if (updateEmployeeDto.allowance !== undefined)
+            updateData.allowance = updateEmployeeDto.allowance;
+        if (updateEmployeeDto.hireDate)
+            updateData.hireDate = new Date(updateEmployeeDto.hireDate);
+        if (updateEmployeeDto.status)
+            updateData.status = updateEmployeeDto.status;
+        if (updateEmployeeDto.avatar !== undefined)
+            updateData.avatar = updateEmployeeDto.avatar;
+        if (updateEmployeeDto.emergencyContact !== undefined)
+            updateData.emergencyContact = updateEmployeeDto.emergencyContact;
+        if (updateEmployeeDto.emergencyPhone !== undefined)
+            updateData.emergencyPhone = updateEmployeeDto.emergencyPhone;
+        if (updateEmployeeDto.departmentId !== undefined) {
+            updateData.departmentId = updateEmployeeDto.departmentId || null;
+        }
+        if (updateEmployeeDto.positionId !== undefined) {
+            updateData.positionId = updateEmployeeDto.positionId || null;
+        }
+        if (updateEmployeeDto.workLocationId !== undefined) {
+            updateData.workLocationId = updateEmployeeDto.workLocationId || null;
+        }
+        if (updateEmployeeDto.shiftId !== undefined) {
+            updateData.shiftId = updateEmployeeDto.shiftId || null;
+        }
+        Object.assign(employee, updateData);
         await this.employeeRepository.save(employee);
         return this.findOne(id);
     }
@@ -258,7 +323,7 @@ let EmployeesService = class EmployeesService {
     async getActiveEmployees() {
         return this.employeeRepository.find({
             where: { status: employee_entity_1.EmployeeStatus.ACTIVE },
-            relations: ['department', 'position'],
+            relations: ['department', 'position', 'workLocation', 'shift'],
         });
     }
 };

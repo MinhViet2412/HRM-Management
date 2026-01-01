@@ -1,0 +1,373 @@
+================================================================================
+                    GIẢI THÍCH CÁC TRƯỜNG DỮ LIỆU - BẢNG AUDIT_LOGS
+================================================================================
+
+Bảng AUDIT_LOGS là bảng nhật ký kiểm toán (audit trail) trong hệ thống HRM,
+được sử dụng để ghi lại tất cả các hoạt động quan trọng của người dùng trong hệ thống.
+
+================================================================================
+                              CÁC TRƯỜNG DỮ LIỆU
+================================================================================
+
+1. id (UUID - Primary Key)
+   -----------------------------------------------------------------------------
+   - Mô tả: Định danh duy nhất cho mỗi bản ghi audit log
+   - Kiểu dữ liệu: UUID (Universally Unique Identifier)
+   - Ràng buộc: PRIMARY KEY, tự động generate
+   - Ví dụ: "550e8400-e29b-41d4-a716-446655440000"
+   
+   Mục đích:
+   - Đảm bảo mỗi bản ghi audit là duy nhất
+   - Không thể trùng lặp
+   - Sử dụng UUID để tránh conflicts khi distributed system
+
+2. userId (VARCHAR - Nullable)
+   -----------------------------------------------------------------------------
+   - Mô tả: ID của người dùng thực hiện hành động
+   - Kiểu dữ liệu: VARCHAR (có thể là string hoặc UUID)
+   - Ràng buộc: NULLABLE (có thể null)
+   - Ví dụ: "user123", "550e8400-e29b-41d4-a716-446655440000"
+   
+   Mục đích:
+   - Theo dõi người dùng nào đã thực hiện hành động
+   - Có thể null trong trường hợp system actions
+   - Giúp trace back ai đã làm gì
+
+3. userEmail (VARCHAR - Nullable)
+   -----------------------------------------------------------------------------
+   - Mô tả: Email của người dùng thực hiện hành động
+   - Kiểu dữ liệu: VARCHAR
+   - Ràng buộc: NULLABLE
+   - Ví dụ: "admin@company.com", "john.doe@company.com"
+   
+   Mục đích:
+   - Dễ dàng identify người dùng qua email
+   - Backup cho userId nếu cần
+   - Human-readable identification
+   - Hữu ích cho reports và emails
+
+4. action (ENUM - NOT NULL)
+   -----------------------------------------------------------------------------
+   - Mô tả: Loại hành động được thực hiện
+   - Kiểu dữ liệu: ENUM (các giá trị cố định)
+   - Ràng buộc: NOT NULL
+   - Các giá trị có thể:
+     - 'create': Tạo mới một entity
+     - 'update': Cập nhật thông tin entity
+     - 'delete': Xóa một entity
+     - 'login': Đăng nhập vào hệ thống
+     - 'logout': Đăng xuất khỏi hệ thống
+     - 'export': Xuất dữ liệu ra ngoài
+     - 'import': Nhập dữ liệu vào hệ thống
+   - Ví dụ: "create", "update", "login"
+   
+   Mục đích:
+   - Phân loại loại hành động được thực hiện
+   - Giúp filter và query logs theo hành động
+   - Compliance và security monitoring
+   - Audit trail requirements
+
+5. entityType (VARCHAR - Nullable)
+   -----------------------------------------------------------------------------
+   - Mô tả: Loại entity (bảng/dữ liệu) bị ảnh hưởng
+   - Kiểu dữ liệu: VARCHAR
+   - Ràng buộc: NULLABLE
+   - Ví dụ: "Employee", "User", "Department", "Contract", "Payroll"
+   
+   Mục đích:
+   - Xác định bảng nào bị ảnh hưởng
+   - Giúp filter logs theo loại data
+   - Indexed để tối ưu query performance
+   - Cùng với entityId tạo composite index
+
+6. entityId (VARCHAR - Nullable)
+   -----------------------------------------------------------------------------
+   - Mô tả: ID cụ thể của entity bị ảnh hưởng
+   - Kiểu dữ liệu: VARCHAR
+   - Ràng buộc: NULLABLE
+   - Ví dụ: "550e8400-e29b-41d4-a716-446655440000", "123"
+   
+   Mục đích:
+   - Xác định record cụ thể nào bị thay đổi
+   - Cùng với entityType tạo composite index
+   - Trace changes của một entity cụ thể
+   - Full audit trail cho một record
+
+7. oldValues (JSONB - Nullable)
+   -----------------------------------------------------------------------------
+   - Mô tả: Giá trị cũ trước khi thay đổi (cho UPDATE/DELETE)
+   - Kiểu dữ liệu: JSONB (JSON Binary format)
+   - Ràng buộc: NULLABLE
+   - Ví dụ: 
+     {
+       "name": "John Doe",
+       "salary": 5000000,
+       "status": "active"
+     }
+   
+   Mục đích:
+   - Lưu trữ trạng thái cũ của data
+   - Khôi phục dữ liệu nếu cần (recovery)
+   - Compare changes
+   - Debug và troubleshooting
+   - Sử dụng JSONB để lưu object phức tạp
+
+8. newValues (JSONB - Nullable)
+   -----------------------------------------------------------------------------
+   - Mô tả: Giá trị mới sau khi thay đổi (cho CREATE/UPDATE)
+   - Kiểu dữ liệu: JSONB (JSON Binary format)
+   - Ràng buộc: NULLABLE
+   - Ví dụ:
+     {
+       "name": "John Smith",
+       "salary": 6000000,
+       "status": "active"
+     }
+   
+   Mục đích:
+   - Lưu trữ trạng thái mới của data
+   - Track changes chính xác
+   - Rollback nếu cần
+   - Audit compliance
+   - Sử dụng JSONB để flexible với structure changes
+
+9. ipAddress (VARCHAR - Nullable)
+   -----------------------------------------------------------------------------
+   - Mô tả: Địa chỉ IP của client thực hiện hành động
+   - Kiểu dữ liệu: VARCHAR
+   - Ràng buộc: NULLABLE
+   - Ví dụ: "192.168.1.1", "10.0.0.1", "::1"
+   
+   Mục đích:
+   - Security tracking
+   - Detect suspicious activities
+   - Geographic tracking (quan trọng cho compliance)
+   - Network troubleshooting
+   - Forensic analysis
+   - Support IPv4 và IPv6
+
+10. userAgent (VARCHAR - Nullable)
+    -----------------------------------------------------------------------------
+    - Mô tả: Thông tin về browser/device/client thực hiện hành động
+    - Kiểu dữ liệu: VARCHAR
+    - Ràng buộc: NULLABLE
+    - Ví dụ: 
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."
+      "PostmanRuntime/7.29.0"
+    
+    Mục đích:
+    - Identify client application
+    - Security monitoring (detect suspicious devices)
+    - User experience analysis
+    - Mobile vs Desktop tracking
+    - Browser compatibility issues
+    - API access tracking
+
+11. description (VARCHAR - Nullable)
+    -----------------------------------------------------------------------------
+    - Mô tả: Mô tả chi tiết về hành động (human-readable)
+    - Kiểu dữ liệu: VARCHAR
+    - Ràng buộc: NULLABLE
+    - Độ dài: 500 characters
+    - Ví dụ: 
+      "User john.doe created employee record EMP001"
+      "Updated salary for employee John Smith"
+      "Exported payroll report for period 2025-01"
+    
+    Mục đích:
+    - Human-readable log entry
+    - Quick understanding without parsing oldValues/newValues
+    - Reports và dashboard
+    - Notification messages
+    - History timeline
+    - Documentation
+
+12. createdAt (TIMESTAMP)
+    -----------------------------------------------------------------------------
+    - Mô tả: Thời gian tạo bản ghi audit log
+    - Kiểu dữ liệu: TIMESTAMP
+    - Ràng buộc: NOT NULL, tự động generate khi tạo record
+    - Ví dụ: "2025-01-25 10:30:45"
+    
+    Mục đích:
+    - Timestamp chính xác của hành động
+    - Thứ tự time-based của events
+    - Đã được index để query nhanh
+    - Reporting và analytics
+    - Compliance và legal requirements
+    - Troubleshooting temporal issues
+
+================================================================================
+                              INDEXES
+================================================================================
+
+Bảng audit_logs có 3 indexes để tối ưu performance:
+
+1. Composite Index: (entityType, entityId)
+   - Mục đích: Query nhanh các changes của một entity cụ thể
+   - Ví dụ: Tất cả changes của Employee ID = "123"
+
+2. Index: (userId)
+   - Mục đích: Query nhanh tất cả actions của một user
+   - Ví dụ: Tất cả activities của user "john.doe"
+
+3. Index: (createdAt)
+   - Mục đích: Query theo thời gian
+   - Ví dụ: All activities trong tháng 1/2025
+   - Range queries hiệu quả
+
+================================================================================
+                              USE CASES
+================================================================================
+
+1. SECURITY MONITORING
+   ------------------
+   - Track login attempts (successful/failed)
+   - Detect suspicious activities từ IP/device
+   - Monitor sensitive operations (payroll, salary changes)
+   - Compliance và audit requirements
+
+2. DEBUG & TROUBLESHOOTING
+   -----------------------
+   - Trace back changes của một entity
+   - Understand "what happened" và "who did it"
+   - Recover từ accidental deletions
+   - Investigate data inconsistencies
+
+3. COMPLIANCE & LEGAL
+   ------------------
+   - Proof of who changed what và when
+   - Legal requirements cho HR systems
+   - Data retention policies
+   - Regulatory compliance (GDPR, etc.)
+
+4. ANALYTICS & REPORTING
+   ----------------------
+   - User activity patterns
+   - Most active users/permissions
+   - Peak usage times
+   - System usage statistics
+
+5. ROLLBACK & RECOVERY
+   -------------------
+   - Restore previous values
+   - Undo accidental changes
+   - Data recovery từ audit log
+   - Version control
+
+================================================================================
+                              VÍ DỤ THỰC TẾ
+================================================================================
+
+VÍ DỤ 1: Employee Update
+-------------------------
+id: "a1b2c3d4..."
+userId: "employee123"
+userEmail: "hr.manager@company.com"
+action: "update"
+entityType: "Employee"
+entityId: "EMP001"
+oldValues: {
+  "name": "John Doe",
+  "salary": 5000000,
+  "department": "IT"
+}
+newValues: {
+  "name": "John Doe",
+  "salary": 6000000,
+  "department": "IT"
+}
+ipAddress: "192.168.1.100"
+userAgent: "Mozilla/5.0...Chrome/..."
+description: "Updated salary for employee EMP001 from 5M to 6M"
+createdAt: "2025-01-25 10:30:00"
+
+VÍ DỤ 2: User Login
+--------------------
+id: "b2c3d4e5..."
+userId: "user456"
+userEmail: "john.smith@company.com"
+action: "login"
+entityType: null
+entityId: null
+oldValues: null
+newValues: {
+  "loginTime": "2025-01-25T08:00:00Z"
+}
+ipAddress: "10.0.0.15"
+userAgent: "Mozilla/5.0...Safari..."
+description: "User john.smith logged in successfully"
+createdAt: "2025-01-25 08:00:15"
+
+VÍ DỤ 3: Payroll Export
+------------------------
+id: "c3d4e5f6..."
+userId: "admin001"
+userEmail: "admin@company.com"
+action: "export"
+entityType: "Payroll"
+entityId: null
+oldValues: null
+newValues: {
+  "period": "2025-01",
+  "format": "Excel"
+}
+ipAddress: "172.16.0.10"
+userAgent: "PostmanRuntime/7.29.0"
+description: "Exported payroll report for period 2025-01"
+createdAt: "2025-01-25 15:45:30"
+
+================================================================================
+                              BEST PRACTICES
+================================================================================
+
+1. PERFORMANCE
+   -----------
+   - Indexes đã được optimize
+   - Consider partitioning by date cho large datasets
+   - Archive old logs (> 1 year) nếu cần
+   - Monitor log growth
+
+2. SECURITY
+   --------
+   - Lưu sensitive data một cách cẩn thận
+   - Hash passwords trong oldValues/newValues
+   - Regular backup of audit logs
+   - Access control cho logs
+
+3. RETENTION
+   ----------
+   - Define retention policy (ví dụ: 7 years cho financial data)
+   - Archive strategy
+   - Data anonymization sau thời gian nhất định
+
+4. MONITORING
+   ----------
+   - Alert on suspicious patterns
+   - Track failed login attempts
+   - Monitor privileged operations
+   - Regular audit reviews
+
+================================================================================
+                              CONCLUSION
+================================================================================
+
+Bảng AUDIT_LOGS là critical component của hệ thống HRM, cung cấp:
+- Complete audit trail
+- Security monitoring
+- Compliance support
+- Debug capabilities
+- Analytics data
+
+Được thiết kế để:
+- Flexible với JSONB cho dynamic data
+- Performant với indexes
+- Traceable với userId, userEmail, ipAddress
+- Time-ordered với createdAt
+- Complete với oldValues và newValues
+
+================================================================================
+                              Export Date: 2025-01-25
+                              System: HRM Management System
+                              Version: 1.0.0
+================================================================================

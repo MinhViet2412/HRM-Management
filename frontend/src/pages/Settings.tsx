@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { User, Bell, Shield, Database, Receipt, ShieldCheck, Clock } from 'lucide-react'
+import { User, Bell, Shield, Database, Receipt, ShieldCheck, Clock, Calendar, Plus, Edit3, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
@@ -785,6 +785,324 @@ const StandardWorkingHoursTab = () => {
   )
 }
 
+// Leave Limit Config Tab Component
+const LeaveLimitConfigTab = () => {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingConfig, setEditingConfig] = useState<any>(null)
+  const [form, setForm] = useState({
+    leaveType: 'annual',
+    year: new Date().getFullYear(),
+    maxDays: '',
+    description: '',
+    isActive: true,
+  })
+
+  const { data: configs, isLoading } = useQuery(
+    'leaveLimitConfigs',
+    async () => {
+      const res = await api.get('/leave-limit-config')
+      return res.data
+    }
+  )
+
+  const createMutation = useMutation(
+    (payload: any) => api.post('/leave-limit-config', payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('leaveLimitConfigs')
+        toast.success(t('settings.leaveLimitCreateSuccess') || 'Đã tạo cấu hình hạn mức nghỉ phép thành công')
+        setIsModalOpen(false)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.leaveLimitCreateError') || 'Không thể tạo cấu hình hạn mức nghỉ phép')
+      }
+    }
+  )
+
+  const updateMutation = useMutation(
+    ({ id, payload }: { id: string; payload: any }) => api.patch(`/leave-limit-config/${id}`, payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('leaveLimitConfigs')
+        toast.success(t('settings.leaveLimitUpdateSuccess') || 'Đã cập nhật cấu hình hạn mức nghỉ phép thành công')
+        setIsModalOpen(false)
+        setEditingConfig(null)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.leaveLimitUpdateError') || 'Không thể cập nhật cấu hình hạn mức nghỉ phép')
+      }
+    }
+  )
+
+  const deleteMutation = useMutation(
+    (id: string) => api.delete(`/leave-limit-config/${id}`),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('leaveLimitConfigs')
+        toast.success(t('settings.leaveLimitDeleteSuccess') || 'Đã xóa cấu hình hạn mức nghỉ phép thành công')
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.leaveLimitDeleteError') || 'Không thể xóa cấu hình hạn mức nghỉ phép')
+      }
+    }
+  )
+
+  const resetForm = () => {
+    setForm({
+      leaveType: 'annual',
+      year: new Date().getFullYear(),
+      maxDays: '',
+      description: '',
+      isActive: true,
+    })
+  }
+
+  const handleOpenModal = (config?: any) => {
+    if (config) {
+      setEditingConfig(config)
+      setForm({
+        leaveType: config.leaveType,
+        year: config.year,
+        maxDays: config.maxDays,
+        description: config.description || '',
+        isActive: config.isActive,
+      })
+    } else {
+      setEditingConfig(null)
+      resetForm()
+    }
+    setIsModalOpen(true)
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const payload = {
+      ...form,
+      maxDays: parseFloat(form.maxDays),
+    }
+
+    if (editingConfig) {
+      updateMutation.mutate({ id: editingConfig.id, payload })
+    } else {
+      createMutation.mutate(payload)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    if (confirm(t('settings.leaveLimitConfirmDelete') || 'Bạn có chắc chắn muốn xóa cấu hình này?')) {
+      deleteMutation.mutate(id)
+    }
+  }
+
+  const getLeaveTypeLabel = (type: string) => {
+    switch (type) {
+      case 'annual':
+        return t('leaves.typeAnnual') || 'Nghỉ phép năm'
+      case 'sick':
+        return t('leaves.typeSick') || 'Nghỉ ốm'
+      case 'maternity':
+        return t('leaves.typeMaternity') || 'Nghỉ thai sản'
+      case 'unpaid':
+        return t('leaves.typeUnpaid') || 'Nghỉ không lương'
+      default:
+        return type
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  // Group configs by year
+  const configsByYear = configs?.reduce((acc: any, config: any) => {
+    if (!acc[config.year]) {
+      acc[config.year] = []
+    }
+    acc[config.year].push(config)
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">
+            {t('settings.leaveLimitConfig') || 'Cấu hình hạn mức nghỉ phép'}
+          </h3>
+          <p className="text-sm text-gray-600">
+            {t('settings.leaveLimitConfigSubtitle') || 'Quản lý hạn mức số ngày nghỉ phép cho từng loại nghỉ trong năm'}
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+          <Plus className="h-4 w-4 mr-2" />
+          {t('common.add')}
+        </button>
+      </div>
+
+      {configs && configs.length > 0 ? (
+        <div className="space-y-6">
+          {Object.keys(configsByYear || {}).sort((a, b) => parseInt(b) - parseInt(a)).map((year) => (
+            <div key={year} className="card p-6">
+              <h4 className="text-md font-semibold text-gray-900 mb-4">
+                {t('settings.year') || 'Năm'}: {year}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {configsByYear[year].map((config: any) => (
+                  <div key={config.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">
+                        {getLeaveTypeLabel(config.leaveType)}
+                      </span>
+                      {!config.isActive && (
+                        <span className="text-xs text-gray-500">(Không áp dụng)</span>
+                      )}
+                    </div>
+                    <p className="text-lg font-bold text-primary-600 mb-1">
+                      {config.maxDays} {t('settings.days') || 'ngày'}
+                    </p>
+                    {config.description && (
+                      <p className="text-xs text-gray-500">{config.description}</p>
+                    )}
+                    <div className="flex justify-end gap-2 mt-3">
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleOpenModal(config)}
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() => handleDelete(config.id)}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 text-gray-500">
+          <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <p>{t('settings.noLeaveLimitConfigs') || 'Chưa có cấu hình hạn mức nghỉ phép nào'}</p>
+        </div>
+      )}
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              {editingConfig ? t('common.edit') : t('common.add')} {t('settings.leaveLimitConfig') || 'Cấu hình hạn mức nghỉ phép'}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('leaves.type') || 'Loại nghỉ phép'} <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="input mt-1 w-full"
+                  value={form.leaveType}
+                  onChange={(e) => setForm({ ...form, leaveType: e.target.value })}
+                  required
+                  disabled={!!editingConfig}
+                >
+                  <option value="annual">{t('leaves.typeAnnual') || 'Nghỉ phép năm'}</option>
+                  <option value="sick">{t('leaves.typeSick') || 'Nghỉ ốm'}</option>
+                  <option value="maternity">{t('leaves.typeMaternity') || 'Nghỉ thai sản'}</option>
+                  <option value="unpaid">{t('leaves.typeUnpaid') || 'Nghỉ không lương'}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('settings.year') || 'Năm'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  className="input mt-1 w-full"
+                  value={form.year}
+                  onChange={(e) => setForm({ ...form, year: parseInt(e.target.value) || new Date().getFullYear() })}
+                  min="2000"
+                  max="2100"
+                  required
+                  disabled={!!editingConfig}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('settings.maxDays') || 'Số ngày tối đa'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  className="input mt-1 w-full"
+                  value={form.maxDays}
+                  onChange={(e) => setForm({ ...form, maxDays: e.target.value })}
+                  min="0"
+                  step="0.01"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('settings.description') || 'Mô tả'}
+                </label>
+                <textarea
+                  className="input mt-1 w-full"
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="rounded"
+                    checked={form.isActive}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    {t('settings.isActive') || 'Đang áp dụng'}
+                  </span>
+                </label>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false)
+                    setEditingConfig(null)
+                    resetForm()
+                  }}
+                  className="btn btn-secondary"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={createMutation.isLoading || updateMutation.isLoading}
+                >
+                  {editingConfig ? t('common.saveChanges') : t('common.add')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('profile')
   const [form, setForm] = useState<any>({})
@@ -856,6 +1174,7 @@ const Settings = () => {
     { id: 'tax', name: t('settings.taxConfig') || 'Cấu hình thuế', icon: Receipt },
     { id: 'insurance', name: t('settings.insuranceConfig') || 'Cấu hình bảo hiểm', icon: ShieldCheck },
     { id: 'working-hours', name: t('settings.standardWorkingHours') || 'Giờ công chuẩn', icon: Clock },
+    { id: 'leave-limit', name: t('settings.leaveLimitConfig') || 'Hạn mức nghỉ phép', icon: Calendar },
     { id: 'system', name: t('settings.system'), icon: Database },
   ]
 
@@ -1084,6 +1403,8 @@ const Settings = () => {
         return <InsuranceConfigTab />
       case 'working-hours':
         return <StandardWorkingHoursTab />
+      case 'leave-limit':
+        return <LeaveLimitConfigTab />
       case 'system':
         return (
           <div className="space-y-6">

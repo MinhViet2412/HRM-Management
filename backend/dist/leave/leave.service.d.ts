@@ -1,10 +1,12 @@
 import { Repository } from 'typeorm';
 import { LeaveRequest } from '../database/entities/leave-request.entity';
 import { Employee } from '../database/entities/employee.entity';
+import { LeaveLimitConfigService } from '../leave-limit-config/leave-limit-config.service';
 export declare class LeaveService {
     private leaveRequestRepository;
     private employeeRepository;
-    constructor(leaveRequestRepository: Repository<LeaveRequest>, employeeRepository: Repository<Employee>);
+    private leaveLimitConfigService;
+    constructor(leaveRequestRepository: Repository<LeaveRequest>, employeeRepository: Repository<Employee>, leaveLimitConfigService: LeaveLimitConfigService);
     createLeaveRequest(employeeId: string, createLeaveRequestDto: any): Promise<LeaveRequest>;
     findAll(): Promise<LeaveRequest[]>;
     findByEmployee(employeeId: string): Promise<LeaveRequest[]>;

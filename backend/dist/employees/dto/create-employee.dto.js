@@ -178,12 +178,14 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({ required: false }),
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((o) => o.workLocationId !== null && o.workLocationId !== undefined),
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], CreateEmployeeDto.prototype, "workLocationId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ required: false }),
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((o) => o.shiftId !== null && o.shiftId !== undefined),
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], CreateEmployeeDto.prototype, "shiftId", void 0);

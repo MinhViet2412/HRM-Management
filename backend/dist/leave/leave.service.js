@@ -18,10 +18,12 @@ const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const leave_request_entity_1 = require("../database/entities/leave-request.entity");
 const employee_entity_1 = require("../database/entities/employee.entity");
+const leave_limit_config_service_1 = require("../leave-limit-config/leave-limit-config.service");
 let LeaveService = class LeaveService {
-    constructor(leaveRequestRepository, employeeRepository) {
+    constructor(leaveRequestRepository, employeeRepository, leaveLimitConfigService) {
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
+        this.leaveLimitConfigService = leaveLimitConfigService;
     }
     async createLeaveRequest(employeeId, createLeaveRequestDto) {
         const employee = await this.employeeRepository.findOne({
@@ -29,6 +31,10 @@ let LeaveService = class LeaveService {
         });
         if (!employee) {
             throw new common_1.NotFoundException('Employee not found');
+        }
+        const allowedTypes = [leave_request_entity_1.LeaveType.ANNUAL, leave_request_entity_1.LeaveType.SICK, leave_request_entity_1.LeaveType.MATERNITY, leave_request_entity_1.LeaveType.UNPAID];
+        if (!allowedTypes.includes(createLeaveRequestDto.type)) {
+            throw new common_1.BadRequestException(`Invalid leave type. Allowed types are: ${allowedTypes.join(', ')}`);
         }
         const startDate = new Date(new Date(createLeaveRequestDto.startDate).toDateString());
         const endDate = new Date(new Date(createLeaveRequestDto.endDate).toDateString());
@@ -41,6 +47,27 @@ let LeaveService = class LeaveService {
         }
         const timeDiff = endDate.getTime() - startDate.getTime();
         const days = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+        const year = startDate.getFullYear();
+        const maxDays = await this.leaveLimitConfigService.getMaxDays(createLeaveRequestDto.type, year);
+        if (maxDays !== null) {
+            const yearStart = new Date(year, 0, 1);
+            const yearEnd = new Date(year, 11, 31);
+            const existingLeaves = await this.leaveRequestRepository.find({
+                where: {
+                    employeeId,
+                    type: createLeaveRequestDto.type,
+                    status: leave_request_entity_1.LeaveStatus.APPROVED,
+                    startDate: (0, typeorm_2.Between)(yearStart, yearEnd),
+                },
+            });
+            const totalUsedDays = existingLeaves.reduce((sum, leave) => sum + Number(leave.days || 0), 0);
+            if (totalUsedDays >= maxDays) {
+                throw new common_1.BadRequestException(`Cannot create leave request. You have already reached the maximum limit of ${maxDays} days for ${createLeaveRequestDto.type} leave in ${year}. Already used: ${totalUsedDays} days.`);
+            }
+            if (totalUsedDays + days > maxDays) {
+                throw new common_1.BadRequestException(`Cannot create leave request. This would exceed the leave limit. Maximum ${maxDays} days allowed for ${createLeaveRequestDto.type} leave in ${year}. Already used: ${totalUsedDays} days. Requested: ${days} days.`);
+            }
+        }
         const leaveRequest = this.leaveRequestRepository.create({
             employeeId,
             type: createLeaveRequestDto.type,
@@ -85,6 +112,27 @@ let LeaveService = class LeaveService {
             throw new common_1.NotFoundException('Employee not found');
         }
         const days = Number(leaveRequest.days);
+        const year = leaveRequest.startDate.getFullYear();
+        const maxDays = await this.leaveLimitConfigService.getMaxDays(leaveRequest.type, year);
+        if (maxDays !== null) {
+            const yearStart = new Date(year, 0, 1);
+            const yearEnd = new Date(year, 11, 31);
+            const existingLeaves = await this.leaveRequestRepository.find({
+                where: {
+                    employeeId: leaveRequest.employeeId,
+                    type: leaveRequest.type,
+                    status: leave_request_entity_1.LeaveStatus.APPROVED,
+                    startDate: (0, typeorm_2.Between)(yearStart, yearEnd),
+                },
+            });
+            const totalUsedDays = existingLeaves.reduce((sum, leave) => sum + Number(leave.days || 0), 0);
+            if (totalUsedDays >= maxDays) {
+                throw new common_1.BadRequestException(`Cannot approve: Employee has already reached the maximum limit of ${maxDays} days for ${leaveRequest.type} leave in ${year}. Already used: ${totalUsedDays} days.`);
+            }
+            if (totalUsedDays + days > maxDays) {
+                throw new common_1.BadRequestException(`Cannot approve: This would exceed the leave limit. Maximum ${maxDays} days allowed for ${leaveRequest.type} leave in ${year}. Already used: ${totalUsedDays} days. Requested: ${days} days.`);
+            }
+        }
         if (leaveRequest.type === leave_request_entity_1.LeaveType.ANNUAL) {
             if (Number(employee.annualLeaveBalance || 0) < days) {
                 throw new common_1.BadRequestException('Not enough annual leave balance');
@@ -130,6 +178,7 @@ exports.LeaveService = LeaveService = __decorate([
     __param(0, (0, typeorm_1.InjectRepository)(leave_request_entity_1.LeaveRequest)),
     __param(1, (0, typeorm_1.InjectRepository)(employee_entity_1.Employee)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
-        typeorm_2.Repository])
+        typeorm_2.Repository,
+        leave_limit_config_service_1.LeaveLimitConfigService])
 ], LeaveService);
 //# sourceMappingURL=leave.service.js.map

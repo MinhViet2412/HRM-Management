@@ -19,6 +19,7 @@ const leave_request_entity_1 = require("./leave-request.entity");
 const payroll_entity_1 = require("./payroll.entity");
 const work_location_entity_1 = require("./work-location.entity");
 const shift_entity_1 = require("./shift.entity");
+const dependent_entity_1 = require("./dependent.entity");
 var EmployeeStatus;
 (function (EmployeeStatus) {
     EmployeeStatus["ACTIVE"] = "active";
@@ -211,6 +212,10 @@ __decorate([
     (0, typeorm_1.OneToMany)(() => payroll_entity_1.Payroll, (payroll) => payroll.employee),
     __metadata("design:type", Array)
 ], Employee.prototype, "payrolls", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)(() => dependent_entity_1.Dependent, (dependent) => dependent.employee),
+    __metadata("design:type", Array)
+], Employee.prototype, "dependents", void 0);
 exports.Employee = Employee = __decorate([
     (0, typeorm_1.Entity)('employees')
 ], Employee);

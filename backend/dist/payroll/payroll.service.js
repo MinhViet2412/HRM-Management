@@ -21,12 +21,21 @@ const employee_entity_1 = require("../database/entities/employee.entity");
 const attendance_entity_1 = require("../database/entities/attendance.entity");
 const contract_entity_1 = require("../database/entities/contract.entity");
 const overtime_request_entity_1 = require("../database/entities/overtime-request.entity");
+const insurance_config_service_1 = require("../insurance-config/insurance-config.service");
+const insurance_config_entity_1 = require("../database/entities/insurance-config.entity");
+const tax_config_service_1 = require("../tax-config/tax-config.service");
+const dependents_service_1 = require("../dependents/dependents.service");
+const standard_working_hours_service_1 = require("../standard-working-hours/standard-working-hours.service");
 let PayrollService = class PayrollService {
-    constructor(payrollRepository, employeeRepository, attendanceRepository, overtimeRepository) {
+    constructor(payrollRepository, employeeRepository, attendanceRepository, overtimeRepository, insuranceConfigService, taxConfigService, dependentsService, standardWorkingHoursService) {
         this.payrollRepository = payrollRepository;
         this.employeeRepository = employeeRepository;
         this.attendanceRepository = attendanceRepository;
         this.overtimeRepository = overtimeRepository;
+        this.insuranceConfigService = insuranceConfigService;
+        this.taxConfigService = taxConfigService;
+        this.dependentsService = dependentsService;
+        this.standardWorkingHoursService = standardWorkingHoursService;
     }
     async generatePayroll(period, targetEmployeeId) {
         const [year, month] = period.split('-');
@@ -70,8 +79,10 @@ let PayrollService = class PayrollService {
                 },
             });
             const workingDays = attendances.filter(a => a.status !== 'absent').length;
-            const totalWorkingDays = this.getWorkingDaysInMonth(startDate);
-            const standardWorkingHours = totalWorkingDays * 8;
+            const [year, month] = period.split('-').map(Number);
+            const standardConfig = await this.standardWorkingHoursService.getOrCalculate(year, month);
+            const totalWorkingDays = Number(standardConfig.days);
+            const standardWorkingHours = Number(standardConfig.hours);
             const actualWorkingHours = attendances.reduce((sum, a) => sum + Number(a.workingHours || 0), 0);
             const basicSalary = Number(contract.baseSalary || employee.basicSalary || 0);
             const allowance = Number(contract.allowance || employee.allowance || 0);
@@ -87,17 +98,64 @@ let PayrollService = class PayrollService {
             const approvedOTHours = approvedOT.reduce((sum, r) => sum + Number(r.hours || 0), 0);
             const overtimeHours = attendanceOvertimeHours + approvedOTHours;
             const overtimePay = hourlyRate * overtimeHours * 1.5;
-            const actualSalary = hourlyRate * actualWorkingHours;
+            let actualSalary;
+            if (actualWorkingHours >= standardWorkingHours) {
+                actualSalary = basicSalary;
+            }
+            else {
+                actualSalary = hourlyRate * actualWorkingHours;
+            }
             const bonus = 0;
             const grossSalary = actualSalary + allowance + overtimePay + bonus;
-            const insuranceBase = basicSalary;
-            const socialInsurance = insuranceBase * 0.08;
-            const healthInsurance = insuranceBase * 0.015;
-            const unemploymentInsurance = insuranceBase * 0.01;
+            const insuranceConfigs = await this.insuranceConfigService.findActive();
+            let socialInsurance = 0;
+            let healthInsurance = 0;
+            let unemploymentInsurance = 0;
+            for (const config of insuranceConfigs) {
+                let insuranceBase;
+                if (config.salaryType === 'contract_total_income') {
+                    insuranceBase = basicSalary + allowance + bonus;
+                }
+                else {
+                    insuranceBase = basicSalary;
+                }
+                const employeeRate = config.employeeRate ?? config.insuranceRate;
+                const insuranceAmount = (insuranceBase * employeeRate) / 100;
+                switch (config.type) {
+                    case insurance_config_entity_1.InsuranceType.SOCIAL:
+                        socialInsurance = insuranceAmount;
+                        break;
+                    case insurance_config_entity_1.InsuranceType.HEALTH:
+                        healthInsurance = insuranceAmount;
+                        break;
+                    case insurance_config_entity_1.InsuranceType.UNEMPLOYMENT:
+                        unemploymentInsurance = insuranceAmount;
+                        break;
+                }
+            }
             const totalInsurance = socialInsurance + healthInsurance + unemploymentInsurance;
+            const personalDeductionAmount = await this.taxConfigService.getDependentDeductionAmount();
+            const activeDependentsCount = await this.dependentsService.getActiveDependentsCount(employee.id);
             const personalDeduction = 11000000;
-            const taxableIncome = Math.max(0, grossSalary - totalInsurance - personalDeduction);
+            const dependentsDeduction = activeDependentsCount * personalDeductionAmount;
+            const totalDeduction = personalDeduction + dependentsDeduction;
+            const taxableIncome = Math.max(0, grossSalary - totalInsurance - totalDeduction);
             const tax = this.calculatePersonalIncomeTax(taxableIncome);
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`[Payroll Debug] Employee: ${employee.employeeCode}, Period: ${period}`);
+                console.log(`  Basic Salary: ${basicSalary.toLocaleString('vi-VN')} VND`);
+                console.log(`  Standard Working Hours: ${standardWorkingHours} hours`);
+                console.log(`  Actual Working Hours: ${actualWorkingHours} hours`);
+                console.log(`  Hourly Rate: ${hourlyRate.toLocaleString('vi-VN')} VND/hour`);
+                console.log(`  Actual Salary: ${actualSalary.toLocaleString('vi-VN')} VND`);
+                console.log(`  Gross Salary: ${grossSalary.toLocaleString('vi-VN')} VND`);
+                console.log(`  Total Insurance: ${totalInsurance.toLocaleString('vi-VN')} VND`);
+                console.log(`  Personal Deduction: ${personalDeduction.toLocaleString('vi-VN')} VND`);
+                console.log(`  Dependents Count: ${activeDependentsCount}, Deduction: ${dependentsDeduction.toLocaleString('vi-VN')} VND`);
+                console.log(`  Total Deduction: ${totalDeduction.toLocaleString('vi-VN')} VND`);
+                console.log(`  Taxable Income: ${taxableIncome.toLocaleString('vi-VN')} VND`);
+                console.log(`  Tax: ${tax.toLocaleString('vi-VN')} VND`);
+            }
             const totalDeductions = totalInsurance + tax;
             const netSalary = grossSalary - totalDeductions;
             const entity = existingPayroll ?? this.payrollRepository.create({ employeeId: employee.id, period });
@@ -171,25 +229,43 @@ let PayrollService = class PayrollService {
         return this.calculatePersonalIncomeTax(grossSalary);
     }
     calculatePersonalIncomeTax(taxableIncome) {
-        const brackets = [
-            { threshold: 5000000, rate: 0.05 },
-            { threshold: 10000000, rate: 0.10 },
-            { threshold: 18000000, rate: 0.15 },
-            { threshold: 32000000, rate: 0.20 },
-            { threshold: 52000000, rate: 0.25 },
-            { threshold: 80000000, rate: 0.30 },
-            { threshold: Infinity, rate: 0.35 },
-        ];
-        let remaining = taxableIncome;
-        let lastThreshold = 0;
+        if (taxableIncome <= 0) {
+            return 0;
+        }
         let tax = 0;
-        for (const { threshold, rate } of brackets) {
-            if (remaining <= 0)
-                break;
-            const band = Math.min(remaining, threshold - lastThreshold);
-            tax += band * rate;
-            remaining -= band;
-            lastThreshold = threshold;
+        let remaining = taxableIncome;
+        if (remaining > 0) {
+            const amount = Math.min(remaining, 5000000);
+            tax += amount * 0.05;
+            remaining -= amount;
+        }
+        if (remaining > 0) {
+            const amount = Math.min(remaining, 5000000);
+            tax += amount * 0.10;
+            remaining -= amount;
+        }
+        if (remaining > 0) {
+            const amount = Math.min(remaining, 8000000);
+            tax += amount * 0.15;
+            remaining -= amount;
+        }
+        if (remaining > 0) {
+            const amount = Math.min(remaining, 14000000);
+            tax += amount * 0.20;
+            remaining -= amount;
+        }
+        if (remaining > 0) {
+            const amount = Math.min(remaining, 20000000);
+            tax += amount * 0.25;
+            remaining -= amount;
+        }
+        if (remaining > 0) {
+            const amount = Math.min(remaining, 28000000);
+            tax += amount * 0.30;
+            remaining -= amount;
+        }
+        if (remaining > 0) {
+            tax += remaining * 0.35;
         }
         return Math.max(0, Math.floor(tax));
     }
@@ -242,6 +318,10 @@ exports.PayrollService = PayrollService = __decorate([
     __metadata("design:paramtypes", [typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
-        typeorm_2.Repository])
+        typeorm_2.Repository,
+        insurance_config_service_1.InsuranceConfigService,
+        tax_config_service_1.TaxConfigService,
+        dependents_service_1.DependentsService,
+        standard_working_hours_service_1.StandardWorkingHoursService])
 ], PayrollService);
 //# sourceMappingURL=payroll.service.js.map

@@ -16,10 +16,7 @@ var LeaveType;
 (function (LeaveType) {
     LeaveType["ANNUAL"] = "annual";
     LeaveType["SICK"] = "sick";
-    LeaveType["PERSONAL"] = "personal";
     LeaveType["MATERNITY"] = "maternity";
-    LeaveType["PATERNITY"] = "paternity";
-    LeaveType["EMERGENCY"] = "emergency";
     LeaveType["UNPAID"] = "unpaid";
 })(LeaveType || (exports.LeaveType = LeaveType = {}));
 var LeaveStatus;

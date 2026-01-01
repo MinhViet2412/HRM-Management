@@ -37,6 +37,11 @@ const contract_types_module_1 = require("./contract-types/contract-types.module"
 const payslips_module_1 = require("./payslips/payslips.module");
 const overtime_module_1 = require("./overtime/overtime.module");
 const attendance_seeder_1 = require("./database/seeds/attendance.seeder");
+const dependents_module_1 = require("./dependents/dependents.module");
+const tax_config_module_1 = require("./tax-config/tax-config.module");
+const insurance_config_module_1 = require("./insurance-config/insurance-config.module");
+const standard_working_hours_module_1 = require("./standard-working-hours/standard-working-hours.module");
+const leave_limit_config_module_1 = require("./leave-limit-config/leave-limit-config.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -77,6 +82,11 @@ exports.AppModule = AppModule = __decorate([
             contract_types_module_1.ContractTypesModule,
             payslips_module_1.PayslipsModule,
             overtime_module_1.OvertimeModule,
+            dependents_module_1.DependentsModule,
+            tax_config_module_1.TaxConfigModule,
+            insurance_config_module_1.InsuranceConfigModule,
+            standard_working_hours_module_1.StandardWorkingHoursModule,
+            leave_limit_config_module_1.LeaveLimitConfigModule,
         ],
         providers: [
             role_seeder_1.RoleSeeder,
