@@ -151,7 +151,7 @@ const EmployeeProfile = () => {
     
     // Only submit if there are changes
     if (Object.keys(payload).length === 0) {
-      toast.info(t('employees.noChanges') || 'No changes to save')
+      toast(t('employees.noChanges') || 'No changes to save')
       return
     }
     

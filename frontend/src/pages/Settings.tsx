@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { User, Bell, Shield, Database, Receipt, ShieldCheck, Clock, Calendar, Plus, Edit3, XCircle } from 'lucide-react'
+import { User, Bell, Shield, Database, Receipt, ShieldCheck, Clock, Calendar, Plus, Edit3, XCircle, CalendarRange } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
@@ -785,6 +785,251 @@ const StandardWorkingHoursTab = () => {
   )
 }
 
+// Holidays Config Tab Component
+const HolidaysTab = () => {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingHoliday, setEditingHoliday] = useState<any>(null)
+  const [form, setForm] = useState({
+    name: '',
+    date: '',
+    description: '',
+  })
+
+  const { data: holidays, isLoading } = useQuery('holidays', async () => {
+    const res = await api.get('/holidays')
+    return res.data
+  })
+
+  const createMutation = useMutation(
+    (payload: any) => api.post('/holidays', payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('holidays')
+        toast.success(t('settings.holidayCreateSuccess') || 'Đã tạo ngày nghỉ lễ')
+        setIsModalOpen(false)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.holidayCreateError') || 'Không thể tạo ngày nghỉ lễ')
+      }
+    }
+  )
+
+  const updateMutation = useMutation(
+    ({ id, payload }: { id: string; payload: any }) => api.patch(`/holidays/${id}`, payload),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('holidays')
+        toast.success(t('settings.holidayUpdateSuccess') || 'Đã cập nhật ngày nghỉ lễ')
+        setIsModalOpen(false)
+        setEditingHoliday(null)
+        resetForm()
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.holidayUpdateError') || 'Không thể cập nhật ngày nghỉ lễ')
+      }
+    }
+  )
+
+  const deleteMutation = useMutation(
+    (id: string) => api.delete(`/holidays/${id}`),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('holidays')
+        toast.success(t('settings.holidayDeleteSuccess') || 'Đã xóa ngày nghỉ lễ')
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || t('settings.holidayDeleteError') || 'Không thể xóa ngày nghỉ lễ')
+      }
+    }
+  )
+
+  const resetForm = () => {
+    setForm({
+      name: '',
+      date: '',
+      description: '',
+    })
+  }
+
+  const handleOpenModal = (holiday?: any) => {
+    if (holiday) {
+      setEditingHoliday(holiday)
+      setForm({
+        name: holiday.name,
+        date: holiday.date?.split('T')[0] || '',
+        description: holiday.description || '',
+      })
+    } else {
+      setEditingHoliday(null)
+      resetForm()
+    }
+    setIsModalOpen(true)
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const payload = {
+      ...form,
+      date: form.date,
+    }
+
+    if (editingHoliday) {
+      updateMutation.mutate({ id: editingHoliday.id, payload })
+    } else {
+      createMutation.mutate(payload)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    if (confirm(t('settings.holidayConfirmDelete') || 'Bạn có chắc chắn muốn xóa ngày nghỉ lễ này?')) {
+      deleteMutation.mutate(id)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">
+            {t('settings.holidays') || 'Ngày nghỉ lễ'}
+          </h3>
+          <p className="text-sm text-gray-600">
+            {t('settings.holidaysSubtitle') || 'Cấu hình ngày nghỉ lễ áp dụng cho toàn bộ nhân viên, tự động tính đủ giờ công'}
+          </p>
+        </div>
+        <button
+          onClick={() => handleOpenModal()}
+          className="btn btn-primary"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          {t('common.add')}
+        </button>
+      </div>
+
+      {holidays && holidays.length > 0 ? (
+        <div className="space-y-4">
+          {holidays.map((holiday: any) => (
+            <div
+              key={holiday.id}
+              className="card p-6 flex items-start justify-between border-l-4 border-l-primary-500"
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h4 className="text-lg font-medium text-gray-900">{holiday.name}</h4>
+                  <span className="px-3 py-1 text-sm rounded-full bg-blue-100 text-blue-800">
+                    {holiday.date ? new Date(holiday.date).toLocaleDateString() : ''}
+                  </span>
+                </div>
+                {holiday.description && (
+                  <p className="text-sm text-gray-600">{holiday.description}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={() => handleOpenModal(holiday)}
+                  className="btn btn-secondary text-sm"
+                >
+                  {t('common.edit')}
+                </button>
+                <button
+                  onClick={() => handleDelete(holiday.id)}
+                  className="btn btn-danger text-sm"
+                >
+                  {t('common.delete')}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 text-gray-500">
+          <CalendarRange className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <p>{t('settings.noHolidays') || 'Chưa có ngày nghỉ lễ nào'}</p>
+        </div>
+      )}
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium mb-4">
+              {editingHoliday ? t('settings.editHoliday') || 'Chỉnh sửa ngày nghỉ lễ' : t('settings.addHoliday') || 'Thêm ngày nghỉ lễ'}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('settings.holidayName') || 'Tên ngày lễ'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="input mt-1 w-full"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('settings.holidayDate') || 'Ngày'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  className="input mt-1 w-full"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('settings.description') || 'Mô tả'}
+                </label>
+                <textarea
+                  className="input mt-1 w-full"
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder={t('settings.holidayDescriptionPlaceholder') || 'Ví dụ: Nghỉ lễ Quốc khánh'}
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false)
+                    setEditingHoliday(null)
+                    resetForm()
+                  }}
+                  className="btn btn-secondary"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={createMutation.isLoading || updateMutation.isLoading}
+                >
+                  {editingHoliday ? t('common.saveChanges') : t('common.add')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Leave Limit Config Tab Component
 const LeaveLimitConfigTab = () => {
   const { t } = useTranslation()
@@ -1174,6 +1419,7 @@ const Settings = () => {
     { id: 'tax', name: t('settings.taxConfig') || 'Cấu hình thuế', icon: Receipt },
     { id: 'insurance', name: t('settings.insuranceConfig') || 'Cấu hình bảo hiểm', icon: ShieldCheck },
     { id: 'working-hours', name: t('settings.standardWorkingHours') || 'Giờ công chuẩn', icon: Clock },
+    { id: 'holidays', name: t('settings.holidays') || 'Ngày nghỉ lễ', icon: CalendarRange },
     { id: 'leave-limit', name: t('settings.leaveLimitConfig') || 'Hạn mức nghỉ phép', icon: Calendar },
     { id: 'system', name: t('settings.system'), icon: Database },
   ]
@@ -1403,6 +1649,8 @@ const Settings = () => {
         return <InsuranceConfigTab />
       case 'working-hours':
         return <StandardWorkingHoursTab />
+      case 'holidays':
+        return <HolidaysTab />
       case 'leave-limit':
         return <LeaveLimitConfigTab />
       case 'system':

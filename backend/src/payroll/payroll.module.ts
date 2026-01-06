@@ -11,6 +11,7 @@ import { InsuranceConfigModule } from '../insurance-config/insurance-config.modu
 import { TaxConfigModule } from '../tax-config/tax-config.module';
 import { DependentsModule } from '../dependents/dependents.module';
 import { StandardWorkingHoursModule } from '../standard-working-hours/standard-working-hours.module';
+import { HolidaysModule } from '../holidays/holidays.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { StandardWorkingHoursModule } from '../standard-working-hours/standard-w
     TaxConfigModule,
     DependentsModule,
     StandardWorkingHoursModule,
+    HolidaysModule,
   ],
   providers: [PayrollService],
   controllers: [PayrollController],

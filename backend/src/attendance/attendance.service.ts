@@ -15,6 +15,8 @@ import { AdjustAttendanceDto } from './dto/adjust-attendance.dto';
 import { WorkingHoursCalculator } from './working-hours-calculator.service';
 import { AttendanceRuleEngine } from './attendance-rule-engine.service';
 import { ManualAttendanceDto } from './dto/manual-attendance.dto';
+import { HolidaysService } from '../holidays/holidays.service';
+import { StandardWorkingHoursService } from '../standard-working-hours/standard-working-hours.service';
 
 @Injectable()
 export class AttendanceService {
@@ -27,6 +29,8 @@ export class AttendanceService {
     private workLocationRepository: Repository<WorkLocation>,
     private workingHoursCalculator: WorkingHoursCalculator,
     private attendanceRuleEngine: AttendanceRuleEngine,
+    private holidaysService: HolidaysService,
+    private standardWorkingHoursService: StandardWorkingHoursService,
   ) {}
 
   async checkIn(employeeId: string, checkInDto: CheckInDto): Promise<Attendance> {
@@ -291,12 +295,40 @@ export class AttendanceService {
         attendance.status = AttendanceStatus.PRESENT;
     }
 
-    // Calculate working hours
-    const workingMs = checkOutTime.getTime() - attendance.checkIn.getTime();
-    const workingHours = workingMs / (1000 * 60 * 60);
-    
-    attendance.workingHours = Math.round(workingHours * 100) / 100;
-    attendance.overtimeHours = Math.max(0, workingHours - 8);
+    // Calculate working hours, but honor company holidays with full credit
+    const attendanceDate = new Date(attendance.date);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    const [year, month] = [
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth() + 1,
+    ];
+    const standardConfig = await this.standardWorkingHoursService.getOrCalculate(
+      year,
+      month,
+    );
+    const dailyStandardHours =
+      Number(standardConfig.days) > 0
+        ? Number(standardConfig.hours) / Number(standardConfig.days)
+        : 8;
+
+    const holidays = await this.holidaysService.findByDateRange(
+      attendanceDate,
+      attendanceDate,
+    );
+    const isHoliday = holidays.length > 0;
+
+    if (isHoliday) {
+      // Grant full daily standard hours and zero overtime for holidays
+      attendance.workingHours = Math.round(dailyStandardHours * 100) / 100;
+      attendance.overtimeHours = 0;
+    } else {
+      const workingMs = checkOutTime.getTime() - attendance.checkIn.getTime();
+      const workingHours = workingMs / (1000 * 60 * 60);
+
+      attendance.workingHours = Math.round(workingHours * 100) / 100;
+      attendance.overtimeHours = Math.max(0, workingHours - dailyStandardHours);
+    }
 
     // Add rule evaluation details to notes
     const ruleNote = `Rule: ${evaluation.result} (${evaluation.matchedRule?.rule_id})`;

@@ -11,6 +11,7 @@ import { InsuranceType } from '../database/entities/insurance-config.entity';
 import { TaxConfigService } from '../tax-config/tax-config.service';
 import { DependentsService } from '../dependents/dependents.service';
 import { StandardWorkingHoursService } from '../standard-working-hours/standard-working-hours.service';
+import { HolidaysService } from '../holidays/holidays.service';
 
 @Injectable()
 export class PayrollService {
@@ -27,6 +28,7 @@ export class PayrollService {
     private taxConfigService: TaxConfigService,
     private dependentsService: DependentsService,
     private standardWorkingHoursService: StandardWorkingHoursService,
+    private holidaysService: HolidaysService,
   ) {}
 
   async generatePayroll(period: string, targetEmployeeId?: string): Promise<Payroll[]> {
@@ -83,15 +85,27 @@ export class PayrollService {
         },
       });
 
-      const workingDays = attendances.filter(a => (a.status as any) !== 'absent').length;
+      const attendanceWorkingDays = attendances.filter(a => (a.status as any) !== 'absent').length;
       
       // Get standard working hours from config (or calculate if not configured)
       const [year, month] = period.split('-').map(Number);
       const standardConfig = await this.standardWorkingHoursService.getOrCalculate(year, month);
-      const totalWorkingDays = Number(standardConfig.days);
+      const standardWorkingDays = Number(standardConfig.days);
       const standardWorkingHours = Number(standardConfig.hours);
       
-      const actualWorkingHours = attendances.reduce((sum, a) => sum + Number(a.workingHours || 0), 0);
+      // Paid holidays: grant full working hours even without attendance
+      const holidays = await this.holidaysService.findByDateRange(startDate, endDate);
+      const holidayCount = holidays.length;
+      const dailyStandardHours =
+        standardWorkingDays > 0 ? standardWorkingHours / standardWorkingDays : 8;
+      const holidayWorkingHours = holidayCount * dailyStandardHours;
+      
+      const actualWorkingHours =
+        attendances.reduce((sum, a) => sum + Number(a.workingHours || 0), 0) +
+        holidayWorkingHours;
+
+      const actualWorkingDays = attendanceWorkingDays + holidayCount;
+      const workingDays = standardWorkingDays;
 
       // Contractual figures
       const basicSalary = Number(contract.baseSalary || employee.basicSalary || 0);
@@ -186,8 +200,9 @@ export class PayrollService {
       if (process.env.NODE_ENV === 'development') {
         console.log(`[Payroll Debug] Employee: ${employee.employeeCode}, Period: ${period}`);
         console.log(`  Basic Salary: ${basicSalary.toLocaleString('vi-VN')} VND`);
-        console.log(`  Standard Working Hours: ${standardWorkingHours} hours`);
-        console.log(`  Actual Working Hours: ${actualWorkingHours} hours`);
+        console.log(`  Standard Working Hours: ${standardWorkingHours} hours (${workingDays} days)`);
+        console.log(`  Actual Working Hours: ${actualWorkingHours} hours (${actualWorkingDays} days)`);
+        console.log(`  Paid Holidays: ${holidayCount} day(s), +${holidayWorkingHours} hours`);
         console.log(`  Hourly Rate: ${hourlyRate.toLocaleString('vi-VN')} VND/hour`);
         console.log(`  Actual Salary: ${actualSalary.toLocaleString('vi-VN')} VND`);
         console.log(`  Gross Salary: ${grossSalary.toLocaleString('vi-VN')} VND`);
@@ -214,8 +229,8 @@ export class PayrollService {
       entity.unemploymentInsurance = unemploymentInsurance;
       entity.totalDeductions = totalDeductions;
       entity.netSalary = netSalary;
-      entity.workingDays = totalWorkingDays;
-      entity.actualWorkingDays = workingDays;
+      entity.workingDays = workingDays;
+      entity.actualWorkingDays = actualWorkingDays;
       entity.status = PayrollStatus.GENERATED;
       entity.approvedAt = null as any;
       entity.approvedBy = null as any;
